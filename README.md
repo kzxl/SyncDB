@@ -54,7 +54,7 @@ SyncDB **không can thiệp** vào bước này.
 
 ### 1. Giao diện UI
 - Chọn thư mục backup (local)
-- Nhập remote path (vd: `ggdrive:DB_Backup/MDS`)
+- Nhập remote path (vd: `ggdrive:DB_Backup`)
 - Checkbox:
   - Ignore existing file
 - Nút:
