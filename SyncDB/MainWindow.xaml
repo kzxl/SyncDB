@@ -1,0 +1,296 @@
+<Window x:Class="SyncDB.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:SyncDB.ViewModels"
+        Title="SyncDB — Rclone Sync Manager" 
+        Width="720" Height="600" MinWidth="600" MinHeight="480"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BgDarkBrush}"
+        Closing="Window_Closing">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="180"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══ HEADER ═══ -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="📦 SyncDB" FontSize="20" FontWeight="Bold"
+                       Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
+
+            <!-- Profile Selector -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Profile:" Foreground="{StaticResource TextSecondaryBrush}" 
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <ComboBox Width="160" ItemsSource="{Binding Profiles}" 
+                          SelectedItem="{Binding SelectedProfile}" DisplayMemberPath="Name"/>
+            </StackPanel>
+
+            <Button Grid.Column="2" Content="＋" Width="32" Height="32" Margin="4,0"
+                    Command="{Binding AddProfileCommand}" ToolTip="Thêm profile"/>
+            <Button Grid.Column="3" Content="✕" Width="32" Height="32"
+                    Command="{Binding DeleteProfileCommand}" ToolTip="Xóa profile"
+                    Style="{StaticResource DangerButton}"/>
+        </Grid>
+
+        <!-- ═══ TAB CONTENT ═══ -->
+        <TabControl Grid.Row="1">
+
+            <!-- ─── Tab: Sync ─── -->
+            <TabItem Header="⚡ Đồng bộ">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+                    <StackPanel>
+
+                        <!-- Source -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <Label Content="📂 Thư mục backup (Source)"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Text="{Binding BackupPath, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
+                                    <Button Grid.Column="1" Content="📁" Width="36" Margin="6,0,0,0"
+                                            Command="{Binding BrowseCommand}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Remote -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <Label Content="☁ Remote Path (vd: ggdrive:DB_Backup)"/>
+                                <TextBox Text="{Binding RemotePath, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Mode & Quick Options -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0">
+                                    <Label Content="🔄 Chế độ sync"/>
+                                    <ComboBox ItemsSource="{Binding SyncModes}" 
+                                              SelectedIndex="{Binding SelectedSyncMode}"/>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                                    <Label Content="Tùy chọn"/>
+                                    <CheckBox Content="Bỏ qua file đã tồn tại" IsChecked="{Binding IgnoreExisting}"/>
+                                    <CheckBox Content="Dry Run (không copy thật)" IsChecked="{Binding DryRun}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Action Buttons -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Content="▶  Chạy Sync" Width="130" Margin="4,0"
+                                        Command="{Binding RunSyncCommand}" 
+                                        Style="{StaticResource SuccessButton}"/>
+                                <Button Content="■  Dừng" Width="100" Margin="4,0"
+                                        Command="{Binding CancelSyncCommand}" 
+                                        Style="{StaticResource DangerButton}"/>
+                                <Button Content="🔌  Test" Width="100" Margin="4,0"
+                                        Command="{Binding TestConnectionCommand}"/>
+                                <Button Content="💾  Lưu" Width="90" Margin="4,0"
+                                        Command="{Binding SaveConfigCommand}" 
+                                        Style="{StaticResource AccentButton}"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ─── Tab: Rclone Options ─── -->
+            <TabItem Header="⚙ Cấu hình Rclone">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+                    <StackPanel>
+
+                        <!-- Performance -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="🚀 Hiệu suất" FontWeight="Bold" FontSize="14" 
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition/>
+                                        <RowDefinition/>
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                        <Label Content="Transfers (1-32)"/>
+                                        <TextBox Text="{Binding Transfers, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                        <Label Content="Checkers (1-64)"/>
+                                        <TextBox Text="{Binding Checkers, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <Label Content="Bandwidth (vd: 1M, 500k)"/>
+                                        <TextBox Text="{Binding BandwidthLimit, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Logging -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="📋 Logging" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
+                                <Label Content="Log Level"/>
+                                <ComboBox ItemsSource="{Binding LogLevels}" 
+                                          SelectedIndex="{Binding SelectedLogLevel}" Width="200"
+                                          HorizontalAlignment="Left"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Extra Flags -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="🔧 Tham số bổ sung" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
+                                <Label Content="Extra rclone flags (thêm trực tiếp vào command)"/>
+                                <TextBox Text="{Binding ExtraFlags, UpdateSourceTrigger=PropertyChanged}" 
+                                         Height="50" AcceptsReturn="True" TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Watch Settings -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="👁 Theo dõi thư mục (Watch)" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
+                                <CheckBox Content="Bật Watch khi Start" IsChecked="{Binding WatchEnabled}"/>
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                        <Label Content="Debounce (giây)"/>
+                                        <TextBox Text="{Binding DebounceSec, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1">
+                                        <Label Content="File filter (vd: *.bak;*.txt)"/>
+                                        <TextBox Text="{Binding FileFilter, UpdateSourceTrigger=PropertyChanged}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Content="👁 Start Watch" Width="120" Margin="0,0,8,0"
+                                            Command="{Binding StartWatchCommand}" Style="{StaticResource AccentButton}"/>
+                                    <Button Content="⏹ Stop Watch" Width="120"
+                                            Command="{Binding StopWatchCommand}" Style="{StaticResource DangerButton}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+        </TabControl>
+
+        <!-- ═══ SEPARATOR ═══ -->
+        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
+                      Background="{StaticResource BorderBrush}" Margin="0,4"/>
+
+        <!-- ═══ LOG OUTPUT ═══ -->
+        <Border Grid.Row="3" Style="{StaticResource CardPanel}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,6">
+                    <TextBlock Text="📝 Output" FontWeight="Bold" FontSize="13"
+                               Foreground="{StaticResource AccentBlueBrush}"/>
+                    <Button Content="🗑 Clear" HorizontalAlignment="Right" Width="70" Height="24"
+                            FontSize="11" Padding="8,2" Command="{Binding ClearLogCommand}"/>
+                </Grid>
+
+                <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" 
+                         Background="{StaticResource BgMediumBrush}"
+                         Foreground="{StaticResource TextPrimaryBrush}"
+                         BorderBrush="{StaticResource BorderBrush}"
+                         BorderThickness="1" FontFamily="Consolas" FontSize="11.5"
+                         ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                         x:Name="LogListBox"/>
+            </Grid>
+        </Border>
+
+        <!-- ═══ STATUS BAR ═══ -->
+        <Border Grid.Row="4" Background="{StaticResource BgMediumBrush}" CornerRadius="4" 
+                Padding="12,6" Margin="0,6,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}" 
+                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+
+                <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0"
+                           Foreground="{StaticResource TextSecondaryBrush}">
+                    <Run Text="Sync cuối: "/><Run Text="{Binding LastSyncTime, Mode=OneWay}"/>
+                </TextBlock>
+
+                <Border Grid.Column="3" CornerRadius="8" Padding="8,2"
+                        Background="{Binding IsWatching, Converter={StaticResource WatchStatusBrushConverter}}">
+                    <TextBlock Text="{Binding IsWatching, Converter={StaticResource WatchStatusTextConverter}}"
+                               FontSize="11" FontWeight="SemiBold"/>
+                </Border>
+            </Grid>
+        </Border>
+
+    </Grid>
+
+    <Window.Resources>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter" 
+                                    xmlns:local="clr-namespace:SyncDB.Core"/>
+        <local:WatchStatusBrushConverter x:Key="WatchStatusBrushConverter" 
+                                         xmlns:local="clr-namespace:SyncDB.Core"/>
+        <local:WatchStatusTextConverter x:Key="WatchStatusTextConverter" 
+                                        xmlns:local="clr-namespace:SyncDB.Core"/>
+    </Window.Resources>
+
+</Window>
