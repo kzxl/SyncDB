@@ -376,8 +376,11 @@
                                     <Button Content="⬇ Tải &amp; Cài rclone" Margin="0,0,8,0"
                                             Command="{Binding InstallRcloneCommand}"
                                             Style="{StaticResource SuccessButton}"/>
-                                    <Button Content="⚙ Mở rclone config"
+                                    <Button Content="⚙ Mở rclone config" Margin="0,0,8,0"
                                             Command="{Binding OpenRcloneConfigCommand}"/>
+                                    <Button Content="📂 Mở thư mục config"
+                                            Command="{Binding OpenRcloneConfigDirCommand}"
+                                            ToolTip="Mở Explorer đến thư mục chứa file rclone.conf"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>

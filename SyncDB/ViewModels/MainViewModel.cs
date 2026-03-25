@@ -286,6 +286,7 @@ namespace SyncDB.ViewModels
         public ICommand CheckVersionCommand { get; }
         public ICommand InstallRcloneCommand { get; }
         public ICommand OpenRcloneConfigCommand { get; }
+        public ICommand OpenRcloneConfigDirCommand { get; }
         public ICommand SaveAppSettingsCommand { get; }
         public ICommand LoadRemotesCommand { get; }
         public ICommand LoadBackupLogCommand { get; }
@@ -399,6 +400,7 @@ namespace SyncDB.ViewModels
             CheckVersionCommand = new RelayCommand(async () => await CheckVersionAsync(), () => !IsInstalling);
             InstallRcloneCommand = new RelayCommand(async () => await InstallRcloneAsync(), () => !IsInstalling);
             OpenRcloneConfigCommand = new RelayCommand(() => _rcloneService.OpenConfig(), () => !IsRunning);
+            OpenRcloneConfigDirCommand = new RelayCommand(async () => await OpenRcloneConfigDirAsync());
             SaveAppSettingsCommand = new RelayCommand(SaveAppSettings);
             LoadRemotesCommand = new RelayCommand(async () => await LoadRemotesAsync());
             LoadBackupLogCommand = new RelayCommand(async () => await LoadBackupLogAsync());
@@ -583,6 +585,33 @@ namespace SyncDB.ViewModels
             finally { IsInstalling = false; _installCts = null; }
         }
 
+        private async Task OpenRcloneConfigDirAsync()
+        {
+            var configPath = await _rcloneService.GetConfigFilePathAsync();
+
+            // Fallback: đường dẫn mặc định Windows nếu rclone chưa cài
+            if (string.IsNullOrWhiteSpace(configPath))
+                configPath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "rclone", "rclone.conf");
+
+            var dir = System.IO.Path.GetDirectoryName(configPath);
+            AddLog($"📂 Thư mục config rclone: {dir}");
+
+            try
+            {
+                if (!System.IO.Directory.Exists(dir))
+                    System.IO.Directory.CreateDirectory(dir);
+
+                // Chọn file nếu tồn tại, không thì mở thư mục
+                if (System.IO.File.Exists(configPath))
+                    System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{configPath}\"");
+                else
+                    System.Diagnostics.Process.Start("explorer.exe", dir);
+            }
+            catch (Exception ex) { AddLog("✖ Lỗi mở thư mục: " + ex.Message); }
+        }
+
         private async Task TestConnectionAsync()
         {
             if (string.IsNullOrWhiteSpace(RemotePath))
@@ -676,12 +705,19 @@ namespace SyncDB.ViewModels
         private async Task LoadRemotesAsync()
         {
             AddLog("🔄 Đang tải danh sách remote...");
-            var remotes = await _rcloneService.ListRemotesAsync();
-            RcloneRemotes = new ObservableCollection<string>(remotes);
-            if (remotes.Count == 0)
-                AddLog("⚠ Không tìm thấy remote nào — hãy mở rclone config để cài đặt");
-            else
-                AddLog($"✔ Tìm thấy {remotes.Count} remote: {string.Join(", ", remotes)}");
+            List<string> remotes;
+            try { remotes = await _rcloneService.ListRemotesAsync(); }
+            catch { remotes = new List<string>(); }
+
+            // Phải update collection trên UI thread
+            _dispatcher.BeginInvoke(new Action(() =>
+            {
+                RcloneRemotes = new ObservableCollection<string>(remotes);
+                if (remotes.Count == 0)
+                    AddLog("⚠ Không tìm thấy remote nào — vào tab Cài đặt → mở rclone config");
+                else
+                    AddLog($"✔ Tìm thấy {remotes.Count} remote: {string.Join(", ", remotes)}");
+            }));
         }
 
         private async Task LoadBackupLogAsync()

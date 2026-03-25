@@ -68,11 +68,7 @@ namespace SyncDB.Service
 
         public void OpenConfig()
         {
-            if (!RcloneExists())
-            {
-                OutputReceived?.Invoke("✖ rclone.exe không tìm thấy");
-                return;
-            }
+            if (!RcloneExists()) { OutputReceived?.Invoke("✖ rclone.exe không tìm thấy"); return; }
             try
             {
                 Process.Start(new ProcessStartInfo
@@ -83,6 +79,41 @@ namespace SyncDB.Service
                 });
             }
             catch (Exception ex) { OutputReceived?.Invoke("✖ Lỗi mở config: " + ex.Message); }
+        }
+
+        /// <summary>Chạy `rclone config file` để lấy đường dẫn file cấu hình</summary>
+        public async Task<string> GetConfigFilePathAsync()
+        {
+            if (!RcloneExists()) return null;
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _rcloneExe,
+                    Arguments = "config file",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (var p = Process.Start(psi))
+                {
+                    if (p == null) return null;
+                    var output = await Task.Run(() => p.StandardOutput.ReadToEnd());
+                    p.WaitForExit(5000);
+                    // Output format: "Configuration file is stored at:\nC:\Users\...\rclone.conf"
+                    foreach (var line in output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var l = line.Trim();
+                        if (l.EndsWith(".conf", StringComparison.OrdinalIgnoreCase) || l.EndsWith(".cfg", StringComparison.OrdinalIgnoreCase))
+                            return l;
+                    }
+                    // fallback: lấy dòng cuối có ký tự path
+                    var lines = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    return lines.Length > 0 ? lines[lines.Length - 1].Trim() : null;
+                }
+            }
+            catch { return null; }
         }
 
         /// <summary>Trả về danh sách remote đã cài (vd: "ggdrive:", "onedrive:")</summary>
