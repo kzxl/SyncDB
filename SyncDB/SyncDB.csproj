@@ -44,6 +44,9 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
@@ -78,6 +81,7 @@
     <Compile Include="Core\Converters.cs" />
     <Compile Include="Model\AppConfig.cs" />
     <Compile Include="Service\RcloneService.cs" />
+    <Compile Include="Service\RcloneInstaller.cs" />
     <Compile Include="Service\ConfigService.cs" />
     <Compile Include="Service\WatcherService.cs" />
     <Compile Include="ViewModels\MainViewModel.cs" />

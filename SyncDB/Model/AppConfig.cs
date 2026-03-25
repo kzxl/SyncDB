@@ -8,9 +8,15 @@ namespace SyncDB.Model
     {
         public List<SyncProfile> Profiles { get; set; } = new List<SyncProfile> { new SyncProfile() };
         public int ActiveProfileIndex { get; set; }
+
+        // Rclone
+        public string RclonePath { get; set; } = ""; // trống = dùng rclone.exe cạnh app
+
+        // App behavior
         public bool MinimizeToTray { get; set; }
         public bool StartMinimized { get; set; }
         public bool AutoStartWatch { get; set; }
+        public bool RunOnStartup { get; set; }
     }
 
     public class SyncProfile

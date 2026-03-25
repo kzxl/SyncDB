@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -10,7 +11,8 @@ namespace SyncDB.Service
 {
     public class RcloneService
     {
-        private readonly string _rcloneExe;
+        private string _rcloneExe;
+        private readonly string _appPath;
         private readonly string _logDir;
         private Process _currentProcess;
         private CancellationTokenSource _cts;
@@ -19,14 +21,102 @@ namespace SyncDB.Service
         public event Action<int> ProcessExited;
 
         public bool IsRunning => _currentProcess != null && !_currentProcess.HasExited;
+        public string RcloneExePath => _rcloneExe;
 
-        public RcloneService(string appPath)
+        public RcloneService(string appPath, string customRclonePath = null)
         {
-            _rcloneExe = Path.Combine(appPath, "rclone.exe");
+            _appPath = appPath;
             _logDir = Path.Combine(appPath, "logs");
+            UpdateRclonePath(customRclonePath);
+        }
+
+        public void UpdateRclonePath(string customPath)
+        {
+            _rcloneExe = !string.IsNullOrWhiteSpace(customPath) && File.Exists(customPath)
+                ? customPath
+                : Path.Combine(_appPath, "rclone.exe");
         }
 
         public bool RcloneExists() => File.Exists(_rcloneExe);
+
+        public async Task<string> GetVersionAsync()
+        {
+            if (!RcloneExists()) return "rclone.exe không tìm thấy";
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _rcloneExe,
+                    Arguments = "version",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (var p = Process.Start(psi))
+                {
+                    if (p == null) return "Không thể chạy rclone";
+                    var output = await Task.Run(() => p.StandardOutput.ReadToEnd());
+                    p.WaitForExit(5000);
+                    // Lấy dòng đầu tiên: "rclone v1.68.2"
+                    var line = output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                    return line.Length > 0 ? line[0].Trim() : "unknown";
+                }
+            }
+            catch (Exception ex) { return "Lỗi: " + ex.Message; }
+        }
+
+        public void OpenConfig()
+        {
+            if (!RcloneExists())
+            {
+                OutputReceived?.Invoke("✖ rclone.exe không tìm thấy");
+                return;
+            }
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/k \"{_rcloneExe}\" config",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex) { OutputReceived?.Invoke("✖ Lỗi mở config: " + ex.Message); }
+        }
+
+        /// <summary>Trả về danh sách remote đã cài (vd: "ggdrive:", "onedrive:")</summary>
+        public async Task<List<string>> ListRemotesAsync()
+        {
+            var result = new List<string>();
+            if (!RcloneExists()) return result;
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _rcloneExe,
+                    Arguments = "listremotes",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (var p = Process.Start(psi))
+                {
+                    if (p == null) return result;
+                    var output = await Task.Run(() => p.StandardOutput.ReadToEnd());
+                    p.WaitForExit(5000);
+                    foreach (var line in output.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var remote = line.Trim();
+                        if (!string.IsNullOrEmpty(remote))
+                            result.Add(remote);
+                    }
+                }
+            }
+            catch { }
+            return result;
+        }
 
         public async Task<Tuple<bool, string>> TestConnectionAsync(string remotePath)
         {
@@ -88,7 +178,7 @@ namespace SyncDB.Service
                 if (!Directory.Exists(_logDir))
                     Directory.CreateDirectory(_logDir);
 
-                var logFile = Path.Combine(_logDir, "rclone.log");
+                var logFile = GetDailyLogPath();
 
                 // Ghi header log
                 File.AppendAllText(logFile,
@@ -201,5 +291,14 @@ namespace SyncDB.Service
             }
             catch { }
         }
+
+        public string GetDailyLogPath()
+        {
+            if (!Directory.Exists(_logDir))
+                Directory.CreateDirectory(_logDir);
+            return Path.Combine(_logDir, "rclone_" + DateTime.Now.ToString("yyyy-MM-dd") + ".log");
+        }
+
+        public string LogDirectory => _logDir;
     }
 }

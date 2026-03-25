@@ -8,6 +8,17 @@
         Background="{StaticResource BgDarkBrush}"
         Closing="Window_Closing">
 
+    <Window.Resources>
+        <local:InverseBoolConverter x:Key="InverseBoolConverter" 
+                                    xmlns:local="clr-namespace:SyncDB.Core"/>
+        <local:WatchStatusBrushConverter x:Key="WatchStatusBrushConverter" 
+                                         xmlns:local="clr-namespace:SyncDB.Core"/>
+        <local:WatchStatusTextConverter x:Key="WatchStatusTextConverter" 
+                                        xmlns:local="clr-namespace:SyncDB.Core"/>
+        <local:BoolToVisConverter x:Key="BoolToVisConverter" 
+                                  xmlns:local="clr-namespace:SyncDB.Core"/>
+    </Window.Resources>
+
     <Window.DataContext>
         <vm:MainViewModel/>
     </Window.DataContext>
@@ -76,7 +87,24 @@
                         <!-- Remote -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <Label Content="☁ Remote Path (vd: ggdrive:DB_Backup)"/>
+                                <Label Content="☁ Remote Path"/>
+                                <!-- Remote picker -->
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox Grid.Column="0"
+                                              ItemsSource="{Binding RcloneRemotes}"
+                                              SelectedItem="{Binding SelectedRemote}"
+                                              IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
+                                    <Button Grid.Column="1" Content="🔄" Width="36" Margin="6,0,0,0"
+                                            Command="{Binding LoadRemotesCommand}"
+                                            ToolTip="Tải danh sách remote từ rclone"/>
+                                </Grid>
+                                <!-- Manual path -->
+                                <Label Content="Hoặc nhập thủ công (vd: ggdrive:DB_Backup)" 
+                                       FontSize="11" Padding="0,0,0,2"/>
                                 <TextBox Text="{Binding RemotePath, UpdateSourceTrigger=PropertyChanged}"
                                          IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
                             </StackPanel>
@@ -224,6 +252,136 @@
                 </ScrollViewer>
             </TabItem>
 
+            <!-- ─── Tab: Log Backup ─── -->
+            <TabItem Header="📋 Log Backup">
+                <Grid Margin="0,8,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Toolbar -->
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="📅 Ngày:" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <ComboBox MinWidth="160" ItemsSource="{Binding LogFiles}"
+                                  SelectedItem="{Binding SelectedLogFile}"
+                                  Margin="0,0,10,0"/>
+                        <Button Content="🔄 Làm mới" Margin="0,0,10,0"
+                                Command="{Binding LoadBackupLogCommand}"
+                                Style="{StaticResource AccentButton}"/>
+                        <TextBlock Text="(tối đa 5000 dòng cuối)"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" FontSize="11"/>
+                        <TextBlock Text=" · Đang tải..." FontSize="11"
+                                   Foreground="{StaticResource AccentOrangeBrush}"
+                                   VerticalAlignment="Center"
+                                   Visibility="{Binding IsLoadingLog, Converter={StaticResource BoolToVisConverter}}"/>
+                    </StackPanel>
+
+                    <!-- Log content -->
+                    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Padding="0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Auto">
+                            <TextBox Text="{Binding BackupLogContent, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     FontFamily="Consolas"
+                                     FontSize="11.5"
+                                     TextWrapping="NoWrap"
+                                     Padding="12"
+                                     Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ─── Tab: Cài đặt ─── -->
+            <TabItem Header="🛠 Cài đặt">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+                    <StackPanel>
+
+                        <!-- Rclone -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="🔧 Rclone" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+
+                                <!-- Path -->
+                                <Label Content="Đường dẫn rclone.exe (trống = tìm trong thư mục app)"/>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Text="{Binding RclonePath, UpdateSourceTrigger=PropertyChanged}"
+                                             IsEnabled="{Binding IsInstalling, Converter={StaticResource InverseBoolConverter}}"/>
+                                    <Button Grid.Column="1" Content="📁" Width="36" Margin="6,0,0,0"
+                                            Command="{Binding BrowseRcloneCommand}"/>
+                                </Grid>
+
+                                <!-- Version info -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                        <Label Content="Phiên bản hiện tại"/>
+                                        <TextBlock Text="{Binding RcloneCurrentVersion}" Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1">
+                                        <Label Content="Phiên bản mới nhất (GitHub)"/>
+                                        <TextBlock Text="{Binding RcloneLatestVersion}" Foreground="{StaticResource AccentBlueBrush}" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Progress -->
+                                <TextBlock Text="{Binding InstallStatusText}" Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="11" Margin="0,0,0,4"
+                                           Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVisConverter}}"/>
+                                <ProgressBar Value="{Binding InstallProgress}" Minimum="0" Maximum="100"
+                                             Margin="0,0,0,8" Height="6"
+                                             Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVisConverter}}"/>
+
+                                <!-- Action buttons -->
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="📋 Kiểm tra phiên bản" Margin="0,0,8,0"
+                                            Command="{Binding CheckVersionCommand}"
+                                            Style="{StaticResource AccentButton}"/>
+                                    <Button Content="⬇ Tải &amp; Cài rclone" Margin="0,0,8,0"
+                                            Command="{Binding InstallRcloneCommand}"
+                                            Style="{StaticResource SuccessButton}"/>
+                                    <Button Content="⚙ Mở rclone config"
+                                            Command="{Binding OpenRcloneConfigCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- App Settings -->
+                        <Border Style="{StaticResource CardPanel}">
+                            <StackPanel>
+                                <TextBlock Text="🖥 Ứng dụng" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+
+                                <CheckBox Content="Ẩn xuống System Tray khi thu nhỏ hoặc đóng"
+                                          IsChecked="{Binding MinimizeToTray}" Margin="0,0,0,4"/>
+                                <CheckBox Content="Khởi động ở chế độ thu nhỏ"
+                                          IsChecked="{Binding StartMinimized}" Margin="0,0,0,4"/>
+                                <CheckBox Content="Chạy cùng Windows (ghi vào registry)"
+                                          IsChecked="{Binding RunOnStartup}" Margin="0,0,0,12"/>
+
+                                <Button Content="💾 Lưu cài đặt" HorizontalAlignment="Left"
+                                        Command="{Binding SaveAppSettingsCommand}"
+                                        Style="{StaticResource AccentButton}"/>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
         </TabControl>
 
         <!-- ═══ SEPARATOR ═══ -->
@@ -283,14 +441,5 @@
         </Border>
 
     </Grid>
-
-    <Window.Resources>
-        <local:InverseBoolConverter x:Key="InverseBoolConverter" 
-                                    xmlns:local="clr-namespace:SyncDB.Core"/>
-        <local:WatchStatusBrushConverter x:Key="WatchStatusBrushConverter" 
-                                         xmlns:local="clr-namespace:SyncDB.Core"/>
-        <local:WatchStatusTextConverter x:Key="WatchStatusTextConverter" 
-                                        xmlns:local="clr-namespace:SyncDB.Core"/>
-    </Window.Resources>
 
 </Window>

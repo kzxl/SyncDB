@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Microsoft.Win32;
 using SyncDB.Core;
 using SyncDB.Model;
 using SyncDB.Service;
@@ -17,6 +20,7 @@ namespace SyncDB.ViewModels
         private readonly ConfigService _configService;
         private readonly RcloneService _rcloneService;
         private readonly WatcherService _watcherService;
+        private readonly RcloneInstaller _installer;
         private AppConfig _appConfig;
 
         // ═══ Profile ═══
@@ -100,7 +104,7 @@ namespace SyncDB.ViewModels
             set { if (SetProperty(ref _bandwidthLimit, value) && SelectedProfile != null) SelectedProfile.BandwidthLimit = value; }
         }
 
-        private int _selectedLogLevel = 1; // INFO
+        private int _selectedLogLevel = 1;
         public int SelectedLogLevel
         {
             get { return _selectedLogLevel; }
@@ -138,6 +142,71 @@ namespace SyncDB.ViewModels
         {
             get { return _fileFilter; }
             set { if (SetProperty(ref _fileFilter, value) && SelectedProfile != null) SelectedProfile.FileFilter = value; }
+        }
+
+        // ═══ Settings Tab — Rclone ═══
+        private string _rclonePath = "";
+        public string RclonePath
+        {
+            get { return _rclonePath; }
+            set { SetProperty(ref _rclonePath, value); }
+        }
+
+        private string _rcloneCurrentVersion = "chưa kiểm tra";
+        public string RcloneCurrentVersion
+        {
+            get { return _rcloneCurrentVersion; }
+            set { SetProperty(ref _rcloneCurrentVersion, value); }
+        }
+
+        private string _rcloneLatestVersion = "chưa kiểm tra";
+        public string RcloneLatestVersion
+        {
+            get { return _rcloneLatestVersion; }
+            set { SetProperty(ref _rcloneLatestVersion, value); }
+        }
+
+        private bool _isInstalling;
+        public bool IsInstalling
+        {
+            get { return _isInstalling; }
+            set { SetProperty(ref _isInstalling, value); }
+        }
+
+        private int _installProgress;
+        public int InstallProgress
+        {
+            get { return _installProgress; }
+            set { SetProperty(ref _installProgress, value); }
+        }
+
+        private string _installStatusText = "";
+        public string InstallStatusText
+        {
+            get { return _installStatusText; }
+            set { SetProperty(ref _installStatusText, value); }
+        }
+
+        // ═══ Settings Tab — App ═══
+        private bool _minimizeToTray;
+        public bool MinimizeToTray
+        {
+            get { return _minimizeToTray; }
+            set { SetProperty(ref _minimizeToTray, value); }
+        }
+
+        private bool _startMinimized;
+        public bool StartMinimized
+        {
+            get { return _startMinimized; }
+            set { SetProperty(ref _startMinimized, value); }
+        }
+
+        private bool _runOnStartup;
+        public bool RunOnStartup
+        {
+            get { return _runOnStartup; }
+            set { SetProperty(ref _runOnStartup, value); }
         }
 
         // ═══ Status ═══
@@ -192,8 +261,64 @@ namespace SyncDB.ViewModels
         public ICommand DeleteProfileCommand { get; }
         public ICommand ClearLogCommand { get; }
         public ICommand SaveConfigCommand { get; }
+        public ICommand BrowseRcloneCommand { get; }
+        public ICommand CheckVersionCommand { get; }
+        public ICommand InstallRcloneCommand { get; }
+        public ICommand OpenRcloneConfigCommand { get; }
+        public ICommand SaveAppSettingsCommand { get; }
+        public ICommand LoadRemotesCommand { get; }
+        public ICommand LoadBackupLogCommand { get; }
+
+        // ═══ Rclone Remotes ═══
+        private ObservableCollection<string> _rcloneRemotes = new ObservableCollection<string>();
+        public ObservableCollection<string> RcloneRemotes
+        {
+            get { return _rcloneRemotes; }
+            set { SetProperty(ref _rcloneRemotes, value); }
+        }
+
+        private string _selectedRemote;
+        public string SelectedRemote
+        {
+            get { return _selectedRemote; }
+            set
+            {
+                if (SetProperty(ref _selectedRemote, value) && !string.IsNullOrEmpty(value))
+                    RemotePath = value;
+            }
+        }
+
+        // ═══ Backup Log Viewer ═══
+        private string _backupLogContent = "(Nhấn Làm mới để tải log)";
+        public string BackupLogContent
+        {
+            get { return _backupLogContent; }
+            set { SetProperty(ref _backupLogContent, value); }
+        }
+
+        private bool _isLoadingLog;
+        public bool IsLoadingLog
+        {
+            get { return _isLoadingLog; }
+            set { SetProperty(ref _isLoadingLog, value); }
+        }
+
+        private ObservableCollection<string> _logFiles = new ObservableCollection<string>();
+        public ObservableCollection<string> LogFiles
+        {
+            get { return _logFiles; }
+            set { SetProperty(ref _logFiles, value); }
+        }
+
+        private string _selectedLogFile;
+        public string SelectedLogFile
+        {
+            get { return _selectedLogFile; }
+            set { SetProperty(ref _selectedLogFile, value); }
+        }
 
         private readonly Dispatcher _dispatcher;
+        private CancellationTokenSource _installCts;
 
         public MainViewModel()
         {
@@ -201,10 +326,12 @@ namespace SyncDB.ViewModels
 
             var appPath = AppDomain.CurrentDomain.BaseDirectory;
             _configService = new ConfigService(appPath);
-            _rcloneService = new RcloneService(appPath);
+            _installer = new RcloneInstaller();
+
+            _appConfig = _configService.Load();
+            _rcloneService = new RcloneService(appPath, _appConfig.RclonePath);
             _watcherService = new WatcherService();
 
-            // Wire events
             _rcloneService.OutputReceived += OnOutputReceived;
             _rcloneService.ProcessExited += code =>
             {
@@ -233,7 +360,6 @@ namespace SyncDB.ViewModels
                 }));
             };
 
-            // Commands
             BrowseCommand = new RelayCommand(BrowseFolder);
             TestConnectionCommand = new RelayCommand(async () => await TestConnectionAsync(), () => !IsRunning);
             RunSyncCommand = new RelayCommand(async () => await DoRunSyncAsync(), () => !IsRunning);
@@ -244,26 +370,35 @@ namespace SyncDB.ViewModels
             DeleteProfileCommand = new RelayCommand(DeleteProfile, () => Profiles != null && Profiles.Count > 1);
             ClearLogCommand = new RelayCommand(() => LogEntries.Clear());
             SaveConfigCommand = new RelayCommand(SaveConfig);
+            BrowseRcloneCommand = new RelayCommand(BrowseRclone);
+            CheckVersionCommand = new RelayCommand(async () => await CheckVersionAsync(), () => !IsInstalling);
+            InstallRcloneCommand = new RelayCommand(async () => await InstallRcloneAsync(), () => !IsInstalling);
+            OpenRcloneConfigCommand = new RelayCommand(() => _rcloneService.OpenConfig(), () => !IsRunning);
+            SaveAppSettingsCommand = new RelayCommand(SaveAppSettings);
+            LoadRemotesCommand = new RelayCommand(async () => await LoadRemotesAsync());
+            LoadBackupLogCommand = new RelayCommand(async () => await LoadBackupLogAsync());
 
-            // Load config
             LoadConfig();
 
             AddLog("SyncDB v2.0 khởi động");
             if (!_rcloneService.RcloneExists())
-                AddLog("⚠ rclone.exe không tìm thấy trong thư mục ứng dụng");
+                AddLog("⚠ rclone.exe không tìm thấy — vào tab Cài đặt để tải về");
         }
 
         // ═══ Load / Save ═══
         private void LoadConfig()
         {
-            _appConfig = _configService.Load();
-
             Profiles = new ObservableCollection<SyncProfile>(_appConfig.Profiles);
             if (Profiles.Count == 0)
                 Profiles.Add(new SyncProfile());
 
             var idx = Math.Max(0, Math.Min(_appConfig.ActiveProfileIndex, Profiles.Count - 1));
             SelectedProfile = Profiles[idx];
+
+            RclonePath = _appConfig.RclonePath ?? "";
+            MinimizeToTray = _appConfig.MinimizeToTray;
+            StartMinimized = _appConfig.StartMinimized;
+            RunOnStartup = _appConfig.RunOnStartup;
         }
 
         private void SaveConfig()
@@ -272,6 +407,36 @@ namespace SyncDB.ViewModels
             _appConfig.ActiveProfileIndex = Profiles.IndexOf(SelectedProfile);
             _configService.Save(_appConfig);
             AddLog("💾 Config đã lưu");
+        }
+
+        private void SaveAppSettings()
+        {
+            _appConfig.RclonePath = RclonePath;
+            _appConfig.MinimizeToTray = MinimizeToTray;
+            _appConfig.StartMinimized = StartMinimized;
+            _appConfig.RunOnStartup = RunOnStartup;
+            _configService.Save(_appConfig);
+            _rcloneService.UpdateRclonePath(RclonePath);
+            ApplyRunOnStartup(RunOnStartup);
+            AddLog("✔ Đã lưu cài đặt ứng dụng");
+        }
+
+        private void ApplyRunOnStartup(bool enable)
+        {
+            const string regKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+            const string appName = "SyncDB";
+            try
+            {
+                using (var key = Registry.CurrentUser.OpenSubKey(regKey, writable: true))
+                {
+                    if (key == null) return;
+                    if (enable)
+                        key.SetValue(appName, "\"" + System.Reflection.Assembly.GetExecutingAssembly().Location + "\"");
+                    else
+                        key.DeleteValue(appName, throwOnMissingValue: false);
+                }
+            }
+            catch (Exception ex) { AddLog("⚠ Registry startup: " + ex.Message); }
         }
 
         // ═══ Profile ═══
@@ -321,12 +486,71 @@ namespace SyncDB.ViewModels
                 Description = "Chọn thư mục backup",
                 ShowNewFolderButton = false
             };
-
             if (!string.IsNullOrEmpty(BackupPath) && System.IO.Directory.Exists(BackupPath))
                 dialog.SelectedPath = BackupPath;
-
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                 BackupPath = dialog.SelectedPath;
+        }
+
+        private void BrowseRclone()
+        {
+            var dialog = new System.Windows.Forms.OpenFileDialog
+            {
+                Title = "Chọn rclone.exe",
+                Filter = "rclone.exe|rclone.exe|Executable (*.exe)|*.exe",
+                CheckFileExists = true
+            };
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                RclonePath = dialog.FileName;
+        }
+
+        private async Task CheckVersionAsync()
+        {
+            IsInstalling = true;
+            InstallStatusText = "Đang kiểm tra...";
+            try
+            {
+                RcloneCurrentVersion = await _rcloneService.GetVersionAsync();
+                InstallStatusText = "Đang lấy version mới nhất...";
+                RcloneLatestVersion = await _installer.GetLatestVersionAsync();
+                InstallStatusText = "";
+                AddLog($"📋 Hiện tại: {RcloneCurrentVersion} | Mới nhất: {RcloneLatestVersion}");
+            }
+            finally { IsInstalling = false; }
+        }
+
+        private async Task InstallRcloneAsync()
+        {
+            IsInstalling = true;
+            InstallProgress = 0;
+            _installCts = new CancellationTokenSource();
+
+            var progress = new Progress<Tuple<int, string>>(p =>
+            {
+                _dispatcher.BeginInvoke(new Action(() =>
+                {
+                    InstallProgress = p.Item1;
+                    InstallStatusText = p.Item2;
+                }));
+            });
+
+            try
+            {
+                var destDir = AppDomain.CurrentDomain.BaseDirectory;
+                var result = await _installer.DownloadAndInstallAsync(destDir, progress, _installCts.Token);
+                if (result.Item1)
+                {
+                    AddLog("✔ Cài xong: " + result.Item2);
+                    RclonePath = "";
+                    _rcloneService.UpdateRclonePath("");
+                    RcloneCurrentVersion = await _rcloneService.GetVersionAsync();
+                }
+                else
+                {
+                    AddLog("✖ Cài rclone thất bại: " + result.Item2);
+                }
+            }
+            finally { IsInstalling = false; _installCts = null; }
         }
 
         private async Task TestConnectionAsync()
@@ -336,12 +560,9 @@ namespace SyncDB.ViewModels
                 AddLog("⚠ Remote path không được trống");
                 return;
             }
-
             StatusText = "🔌 Đang test kết nối...";
             AddLog("🔌 Test kết nối: " + RemotePath);
-
             var result = await _rcloneService.TestConnectionAsync(RemotePath);
-
             if (result.Item1)
             {
                 StatusText = "✔ Kết nối thành công";
@@ -357,7 +578,6 @@ namespace SyncDB.ViewModels
         private async Task DoRunSyncAsync()
         {
             if (IsRunning || SelectedProfile == null) return;
-
             if (string.IsNullOrWhiteSpace(BackupPath) || !System.IO.Directory.Exists(BackupPath))
             {
                 AddLog("⚠ Đường dẫn backup không hợp lệ");
@@ -368,11 +588,9 @@ namespace SyncDB.ViewModels
                 AddLog("⚠ Remote path không được trống");
                 return;
             }
-
             IsRunning = true;
             StatusText = "🔄 Đang đồng bộ...";
             SaveConfig();
-
             await _rcloneService.RunSyncAsync(SelectedProfile);
         }
 
@@ -391,7 +609,6 @@ namespace SyncDB.ViewModels
                 AddLog("⚠ Đường dẫn backup không hợp lệ để watch");
                 return;
             }
-
             _watcherService.Start(BackupPath, FileFilter, DebounceSec);
             IsWatching = true;
             StatusText = "👁 Đang theo dõi thư mục...";
@@ -407,7 +624,6 @@ namespace SyncDB.ViewModels
             AddLog("⏹ Dừng watch");
         }
 
-        // ═══ Log ═══
         private void OnOutputReceived(string msg)
         {
             _dispatcher.BeginInvoke(new Action(() => AddLog(msg)));
@@ -417,10 +633,73 @@ namespace SyncDB.ViewModels
         {
             var entry = DateTime.Now.ToString("HH:mm:ss") + "  " + msg;
             LogEntries.Add(entry);
-
-            // Giới hạn 1000 dòng
             while (LogEntries.Count > 1000)
                 LogEntries.RemoveAt(0);
+        }
+
+        private async Task LoadRemotesAsync()
+        {
+            AddLog("🔄 Đang tải danh sách remote...");
+            var remotes = await _rcloneService.ListRemotesAsync();
+            RcloneRemotes = new ObservableCollection<string>(remotes);
+            if (remotes.Count == 0)
+                AddLog("⚠ Không tìm thấy remote nào — hãy mở rclone config để cài đặt");
+            else
+                AddLog($"✔ Tìm thấy {remotes.Count} remote: {string.Join(", ", remotes)}");
+        }
+
+        private async Task LoadBackupLogAsync()
+        {
+            IsLoadingLog = true;
+            try
+            {
+                var logDir = _rcloneService.LogDirectory;
+
+                // Scan tất cả file log trong thư mục
+                var files = await Task.Run(() =>
+                {
+                    if (!Directory.Exists(logDir)) return new List<string>();
+                    return Directory.GetFiles(logDir, "rclone_*.log")
+                        .OrderByDescending(f => f)
+                        .Select(f => Path.GetFileName(f))
+                        .ToList();
+                });
+
+                var prevSelected = SelectedLogFile;
+                LogFiles = new ObservableCollection<string>(files);
+
+                // Chọn file: giữ nguyên nếu vẫn tồn tại, không thì chọn mới nhất
+                if (files.Contains(prevSelected))
+                    SelectedLogFile = prevSelected;
+                else
+                    SelectedLogFile = files.FirstOrDefault();
+
+                if (SelectedLogFile == null)
+                {
+                    BackupLogContent = $"Chưa có file log.\nThư mục kiểm tra: {logDir}";
+                    return;
+                }
+
+                var logPath = Path.Combine(logDir, SelectedLogFile);
+                var content = await Task.Run(() =>
+                {
+                    var lines = new List<string>();
+                    using (var fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var sr = new StreamReader(fs))
+                    {
+                        string line;
+                        while ((line = sr.ReadLine()) != null)
+                        {
+                            lines.Add(line);
+                            if (lines.Count > 5000) lines.RemoveAt(0);
+                        }
+                    }
+                    return string.Join("\n", lines);
+                });
+                BackupLogContent = content;
+            }
+            catch (Exception ex) { BackupLogContent = "Lỗi đọc log: " + ex.Message; }
+            finally { IsLoadingLog = false; }
         }
 
         public void OnClosing()
