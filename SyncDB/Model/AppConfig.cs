@@ -44,6 +44,10 @@ namespace SyncDB.Model
         public int DebounceSec { get; set; } = 15;
         public string FileFilter { get; set; } = "*.bak;*.txt";
 
+        // File lock check
+        public int FileLockTimeoutSec { get; set; } = 60;  // chờ tối đa bao lâu
+        public int FileLockRetryMs { get; set; } = 500;    // thử lại mỗi bao ms
+
         // Schedule
         public bool ScheduleEnabled { get; set; }
         public int ScheduleIntervalMin { get; set; } = 60;

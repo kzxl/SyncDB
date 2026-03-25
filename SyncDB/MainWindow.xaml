@@ -98,7 +98,7 @@
                                               ItemsSource="{Binding RcloneRemotes}"
                                               SelectedItem="{Binding SelectedRemote}"
                                               IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
-                                    <Button Grid.Column="1" Content="🔄" Width="36" Margin="6,0,0,0"
+                                    <Button Grid.Column="1" Content="↻" Width="36" Margin="6,0,0,0"
                                             Command="{Binding LoadRemotesCommand}"
                                             ToolTip="Tải danh sách remote từ rclone"/>
                                 </Grid>
@@ -141,9 +141,9 @@
                                 <Button Content="■  Dừng" Width="100" Margin="4,0"
                                         Command="{Binding CancelSyncCommand}" 
                                         Style="{StaticResource DangerButton}"/>
-                                <Button Content="🔌  Test" Width="100" Margin="4,0"
+                                <Button Content="⚡  Test" Width="110" Margin="4,0"
                                         Command="{Binding TestConnectionCommand}"/>
-                                <Button Content="💾  Lưu" Width="90" Margin="4,0"
+                                <Button Content="✔  Lưu" Width="90" Margin="4,0"
                                         Command="{Binding SaveConfigCommand}" 
                                         Style="{StaticResource AccentButton}"/>
                             </StackPanel>
@@ -222,22 +222,43 @@
                                 <TextBlock Text="👁 Theo dõi thư mục (Watch)" FontWeight="Bold" FontSize="14"
                                            Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
                                 <CheckBox Content="Bật Watch khi Start" IsChecked="{Binding WatchEnabled}"/>
-                                <Grid Margin="0,8,0,0">
+
+                                <Grid Margin="0,8,0,6">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
                                     <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                        <Label Content="Debounce (giây)"/>
+                                        <Label Content="⏱ Debounce (giây)"/>
                                         <TextBox Text="{Binding DebounceSec, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Text="Chờ bao lâu sau file ready mới trigger backup"
+                                                   FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="1">
-                                        <Label Content="File filter (vd: *.bak;*.txt)"/>
-                                        <TextBox Text="{Binding FileFilter, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                        <Label Content="🔒 Lock timeout (giây)"/>
+                                        <TextBox Text="{Binding FileLockTimeoutSec, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Text="Chờ tối đa bao lâu nếu file đang bị ghi"
+                                                   FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2">
+                                        <Label Content="🔁 Retry interval (ms)"/>
+                                        <TextBox Text="{Binding FileLockRetryMs, UpdateSourceTrigger=PropertyChanged}"/>
+                                        <TextBlock Text="Thử lại kiểm tra lock mỗi bao ms"
+                                                   FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
+                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
                                     </StackPanel>
                                 </Grid>
+
+                                <StackPanel Margin="0,6,0,0">
+                                    <Label Content="File filter (vd: *.bak;*.txt)"/>
+                                    <TextBox Text="{Binding FileFilter, UpdateSourceTrigger=PropertyChanged}"/>
+                                </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <Button Content="👁 Start Watch" Width="120" Margin="0,0,8,0"

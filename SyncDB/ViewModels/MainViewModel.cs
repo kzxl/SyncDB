@@ -144,6 +144,20 @@ namespace SyncDB.ViewModels
             set { if (SetProperty(ref _fileFilter, value) && SelectedProfile != null) SelectedProfile.FileFilter = value; }
         }
 
+        private int _fileLockTimeoutSec = 60;
+        public int FileLockTimeoutSec
+        {
+            get { return _fileLockTimeoutSec; }
+            set { if (SetProperty(ref _fileLockTimeoutSec, value) && SelectedProfile != null) SelectedProfile.FileLockTimeoutSec = value; }
+        }
+
+        private int _fileLockRetryMs = 500;
+        public int FileLockRetryMs
+        {
+            get { return _fileLockRetryMs; }
+            set { if (SetProperty(ref _fileLockRetryMs, value) && SelectedProfile != null) SelectedProfile.FileLockRetryMs = value; }
+        }
+
         // ═══ Settings Tab — Rclone ═══
         private string _rclonePath = "";
         public string RclonePath
@@ -348,6 +362,10 @@ namespace SyncDB.ViewModels
                 _dispatcher.BeginInvoke(new Action(() =>
                     AddLog("📁 Phát hiện file: " + System.IO.Path.GetFileName(file))));
             };
+            _watcherService.LogMessage += msg =>
+            {
+                _dispatcher.BeginInvoke(new Action(() => AddLog(msg)));
+            };
             _watcherService.DebounceTrigger += () =>
             {
                 _dispatcher.BeginInvoke(new Action(async () =>
@@ -383,6 +401,8 @@ namespace SyncDB.ViewModels
             AddLog("SyncDB v2.0 khởi động");
             if (!_rcloneService.RcloneExists())
                 AddLog("⚠ rclone.exe không tìm thấy — vào tab Cài đặt để tải về");
+            else
+                Task.Run(async () => await LoadRemotesAsync());
         }
 
         // ═══ Load / Save ═══
@@ -459,6 +479,8 @@ namespace SyncDB.ViewModels
             WatchEnabled = p.WatchEnabled;
             DebounceSec = p.DebounceSec;
             FileFilter = p.FileFilter;
+            FileLockTimeoutSec = p.FileLockTimeoutSec;
+            FileLockRetryMs = p.FileLockRetryMs;
         }
 
         private void AddProfile()
@@ -609,11 +631,11 @@ namespace SyncDB.ViewModels
                 AddLog("⚠ Đường dẫn backup không hợp lệ để watch");
                 return;
             }
-            _watcherService.Start(BackupPath, FileFilter, DebounceSec);
+            _watcherService.Start(BackupPath, FileFilter, DebounceSec, FileLockTimeoutSec, FileLockRetryMs);
             IsWatching = true;
             StatusText = "👁 Đang theo dõi thư mục...";
             SaveConfig();
-            AddLog("👁 Bắt đầu watch: " + BackupPath);
+            AddLog($"👁 Bắt đầu watch: {BackupPath} | Debounce: {DebounceSec}s | Lock timeout: {FileLockTimeoutSec}s | Retry: {FileLockRetryMs}ms");
         }
 
         private void StopWatch()
