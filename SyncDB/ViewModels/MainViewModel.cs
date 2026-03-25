@@ -158,6 +158,13 @@ namespace SyncDB.ViewModels
             set { if (SetProperty(ref _fileLockRetryMs, value) && SelectedProfile != null) SelectedProfile.FileLockRetryMs = value; }
         }
 
+        private bool _syncOnStartWatch = true;
+        public bool SyncOnStartWatch
+        {
+            get { return _syncOnStartWatch; }
+            set { if (SetProperty(ref _syncOnStartWatch, value) && SelectedProfile != null) SelectedProfile.SyncOnStartWatch = value; }
+        }
+
         // ═══ Settings Tab — Rclone ═══
         private string _rclonePath = "";
         public string RclonePath
@@ -382,7 +389,7 @@ namespace SyncDB.ViewModels
             TestConnectionCommand = new RelayCommand(async () => await TestConnectionAsync(), () => !IsRunning);
             RunSyncCommand = new RelayCommand(async () => await DoRunSyncAsync(), () => !IsRunning);
             CancelSyncCommand = new RelayCommand(CancelSync, () => IsRunning);
-            StartWatchCommand = new RelayCommand(StartWatch, () => !IsWatching);
+            StartWatchCommand = new RelayCommand(async () => await StartWatch(), () => !IsWatching);
             StopWatchCommand = new RelayCommand(StopWatch, () => IsWatching);
             AddProfileCommand = new RelayCommand(AddProfile);
             DeleteProfileCommand = new RelayCommand(DeleteProfile, () => Profiles != null && Profiles.Count > 1);
@@ -481,6 +488,7 @@ namespace SyncDB.ViewModels
             FileFilter = p.FileFilter;
             FileLockTimeoutSec = p.FileLockTimeoutSec;
             FileLockRetryMs = p.FileLockRetryMs;
+            SyncOnStartWatch = p.SyncOnStartWatch;
         }
 
         private void AddProfile()
@@ -624,7 +632,7 @@ namespace SyncDB.ViewModels
             AddLog("⚠ Sync đã bị hủy");
         }
 
-        private void StartWatch()
+        private async Task StartWatch()
         {
             if (string.IsNullOrWhiteSpace(BackupPath) || !System.IO.Directory.Exists(BackupPath))
             {
@@ -636,6 +644,12 @@ namespace SyncDB.ViewModels
             StatusText = "👁 Đang theo dõi thư mục...";
             SaveConfig();
             AddLog($"👁 Bắt đầu watch: {BackupPath} | Debounce: {DebounceSec}s | Lock timeout: {FileLockTimeoutSec}s | Retry: {FileLockRetryMs}ms");
+
+            if (SyncOnStartWatch)
+            {
+                AddLog("🔄 Đồng bộ tất cả file hiện có trước khi watch...");
+                await DoRunSyncAsync();
+            }
         }
 
         private void StopWatch()

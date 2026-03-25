@@ -47,6 +47,7 @@ namespace SyncDB.Model
         // File lock check
         public int FileLockTimeoutSec { get; set; } = 60;  // chờ tối đa bao lâu
         public int FileLockRetryMs { get; set; } = 500;    // thử lại mỗi bao ms
+        public bool SyncOnStartWatch { get; set; } = true; // đồng bộ tất cả file khi bắt đầu watch
 
         // Schedule
         public bool ScheduleEnabled { get; set; }

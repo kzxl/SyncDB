@@ -222,6 +222,8 @@
                                 <TextBlock Text="👁 Theo dõi thư mục (Watch)" FontWeight="Bold" FontSize="14"
                                            Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
                                 <CheckBox Content="Bật Watch khi Start" IsChecked="{Binding WatchEnabled}"/>
+                                <CheckBox Content="Đồng bộ tất cả file hiện có khi bắt đầu Watch" 
+                                          IsChecked="{Binding SyncOnStartWatch}" Margin="0,4,0,0"/>
 
                                 <Grid Margin="0,8,0,6">
                                     <Grid.ColumnDefinitions>
