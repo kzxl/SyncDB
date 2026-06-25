@@ -56,4 +56,35 @@ namespace SyncDB.Core
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
             => throw new NotImplementedException();
     }
+
+    /// <summary>
+    /// Phân tích dòng log để trả về màu sắc tương ứng
+    /// </summary>
+    public class LogEntryColorConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (!(value is string log) || string.IsNullOrEmpty(log))
+                return Application.Current.FindResource("TextPrimaryBrush");
+
+            var lower = log.ToLower();
+
+            if (lower.Contains("error") || lower.Contains("fail") || lower.Contains("lỗi") || lower.Contains("exception") || lower.Contains("✖") || lower.Contains("thất bại"))
+                return Application.Current.FindResource("AccentRedBrush");
+
+            if (lower.Contains("warn") || lower.Contains("cảnh báo") || lower.Contains("warning") || lower.Contains("⚠"))
+                return Application.Current.FindResource("AccentOrangeBrush");
+
+            if (lower.Contains("success") || lower.Contains("thành công") || lower.Contains("✔") || lower.Contains("cài xong") || lower.Contains("lưu xong") || lower.Contains("đã lưu"))
+                return Application.Current.FindResource("AccentGreenBrush");
+
+            if (lower.Contains("watch") || lower.Contains("theo dõi") || lower.Contains("👁") || lower.Contains("phát hiện") || lower.Contains("triggered"))
+                return Application.Current.FindResource("AccentBlueBrush");
+
+            return Application.Current.FindResource("TextPrimaryBrush");
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+            => throw new NotImplementedException();
+    }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -22,6 +23,9 @@ namespace SyncDB.ViewModels
         private readonly WatcherService _watcherService;
         private readonly RcloneInstaller _installer;
         private AppConfig _appConfig;
+        
+        private readonly ConcurrentQueue<string> _pendingLogs = new ConcurrentQueue<string>();
+        private readonly DispatcherTimer _logFlushTimer;
 
         // ═══ Profile ═══
         private ObservableCollection<SyncProfile> _profiles;
@@ -357,33 +361,33 @@ namespace SyncDB.ViewModels
             _rcloneService.OutputReceived += OnOutputReceived;
             _rcloneService.ProcessExited += code =>
             {
-                _dispatcher.BeginInvoke(new Action(() =>
+                _dispatcher.InvokeAsync(() =>
                 {
                     IsRunning = false;
                     LastSyncTime = DateTime.Now.ToString("HH:mm:ss");
                     StatusText = code == 0 ? "✔ Đồng bộ thành công" : "✖ Lỗi (code " + code + ")";
-                }));
+                });
             };
 
             _watcherService.FileDetected += file =>
             {
-                _dispatcher.BeginInvoke(new Action(() =>
-                    AddLog("📁 Phát hiện file: " + System.IO.Path.GetFileName(file))));
+                _dispatcher.InvokeAsync(() =>
+                    AddLog("📁 Phát hiện file: " + System.IO.Path.GetFileName(file)));
             };
             _watcherService.LogMessage += msg =>
             {
-                _dispatcher.BeginInvoke(new Action(() => AddLog(msg)));
+                _dispatcher.InvokeAsync(() => AddLog(msg));
             };
             _watcherService.DebounceTrigger += () =>
             {
-                _dispatcher.BeginInvoke(new Action(async () =>
+                _dispatcher.InvokeAsync(async () =>
                 {
                     if (!IsRunning && SelectedProfile != null)
                     {
                         AddLog("🔄 Auto sync triggered...");
                         await DoRunSyncAsync();
                     }
-                }));
+                });
             };
 
             BrowseCommand = new RelayCommand(BrowseFolder);
@@ -406,6 +410,13 @@ namespace SyncDB.ViewModels
             LoadBackupLogCommand = new RelayCommand(async () => await LoadBackupLogAsync());
 
             LoadConfig();
+
+            _logFlushTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(150)
+            };
+            _logFlushTimer.Tick += FlushLogs;
+            _logFlushTimer.Start();
 
             AddLog("SyncDB v2.0 khởi động");
             if (!_rcloneService.RcloneExists())
@@ -559,11 +570,11 @@ namespace SyncDB.ViewModels
 
             var progress = new Progress<Tuple<int, string>>(p =>
             {
-                _dispatcher.BeginInvoke(new Action(() =>
+                _dispatcher.InvokeAsync(() =>
                 {
                     InstallProgress = p.Item1;
                     InstallStatusText = p.Item2;
-                }));
+                });
             });
 
             try
@@ -691,15 +702,31 @@ namespace SyncDB.ViewModels
 
         private void OnOutputReceived(string msg)
         {
-            _dispatcher.BeginInvoke(new Action(() => AddLog(msg)));
+            _pendingLogs.Enqueue(msg);
         }
 
         private void AddLog(string msg)
         {
-            var entry = DateTime.Now.ToString("HH:mm:ss") + "  " + msg;
-            LogEntries.Add(entry);
-            while (LogEntries.Count > 1000)
-                LogEntries.RemoveAt(0);
+            _pendingLogs.Enqueue(msg);
+        }
+
+        private void FlushLogs(object sender, EventArgs e)
+        {
+            if (_pendingLogs.IsEmpty) return;
+
+            bool added = false;
+            while (_pendingLogs.TryDequeue(out var log))
+            {
+                var entry = DateTime.Now.ToString("HH:mm:ss") + "  " + log;
+                LogEntries.Add(entry);
+                added = true;
+            }
+
+            if (added)
+            {
+                while (LogEntries.Count > 1000)
+                    LogEntries.RemoveAt(0);
+            }
         }
 
         private async Task LoadRemotesAsync()
@@ -710,14 +737,14 @@ namespace SyncDB.ViewModels
             catch { remotes = new List<string>(); }
 
             // Phải update collection trên UI thread
-            _dispatcher.BeginInvoke(new Action(() =>
+            _dispatcher.InvokeAsync(() =>
             {
                 RcloneRemotes = new ObservableCollection<string>(remotes);
                 if (remotes.Count == 0)
                     AddLog("⚠ Không tìm thấy remote nào — vào tab Cài đặt → mở rclone config");
                 else
                     AddLog($"✔ Tìm thấy {remotes.Count} remote: {string.Join(", ", remotes)}");
-            }));
+            });
         }
 
         private async Task LoadBackupLogAsync()
@@ -776,6 +803,7 @@ namespace SyncDB.ViewModels
 
         public void OnClosing()
         {
+            _logFlushTimer?.Stop();
             _watcherService.Dispose();
             _rcloneService.Cancel();
             SaveConfig();

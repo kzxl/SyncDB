@@ -3,20 +3,22 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:SyncDB.ViewModels"
         Title="SyncDB — Rclone Sync Manager" 
-        Width="720" Height="600" MinWidth="600" MinHeight="480"
+        Width="780" Height="650" MinWidth="700" MinHeight="550"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource BgDarkBrush}"
         Closing="Window_Closing">
 
     <Window.Resources>
         <local:InverseBoolConverter x:Key="InverseBoolConverter" 
-                                    xmlns:local="clr-namespace:SyncDB.Core"/>
+                                     xmlns:local="clr-namespace:SyncDB.Core"/>
         <local:WatchStatusBrushConverter x:Key="WatchStatusBrushConverter" 
-                                         xmlns:local="clr-namespace:SyncDB.Core"/>
+                                          xmlns:local="clr-namespace:SyncDB.Core"/>
         <local:WatchStatusTextConverter x:Key="WatchStatusTextConverter" 
-                                        xmlns:local="clr-namespace:SyncDB.Core"/>
+                                         xmlns:local="clr-namespace:SyncDB.Core"/>
         <local:BoolToVisConverter x:Key="BoolToVisConverter" 
-                                  xmlns:local="clr-namespace:SyncDB.Core"/>
+                                   xmlns:local="clr-namespace:SyncDB.Core"/>
+        <local:LogEntryColorConverter x:Key="LogEntryColorConverter" 
+                                      xmlns:local="clr-namespace:SyncDB.Core"/>
     </Window.Resources>
 
     <Window.DataContext>
@@ -28,12 +30,12 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="180"/>
+            <RowDefinition Height="200"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- ═══ HEADER ═══ -->
-        <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid Grid.Row="0" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -41,30 +43,44 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Column="0" Text="📦 SyncDB" FontSize="20" FontWeight="Bold"
-                       Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xF12B;" FontSize="22" 
+                           Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="SyncDB" FontSize="20" FontWeight="Bold"
+                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
 
             <!-- Profile Selector -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="28,0,0,0" VerticalAlignment="Center">
                 <TextBlock Text="Profile:" Foreground="{StaticResource TextSecondaryBrush}" 
-                           VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ComboBox Width="160" ItemsSource="{Binding Profiles}" 
+                            VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                <ComboBox Width="180" ItemsSource="{Binding Profiles}" 
                           SelectedItem="{Binding SelectedProfile}" DisplayMemberPath="Name"/>
             </StackPanel>
 
-            <Button Grid.Column="2" Content="＋" Width="32" Height="32" Margin="4,0"
-                    Command="{Binding AddProfileCommand}" ToolTip="Thêm profile"/>
-            <Button Grid.Column="3" Content="✕" Width="32" Height="32"
-                    Command="{Binding DeleteProfileCommand}" ToolTip="Xóa profile"
-                    Style="{StaticResource DangerButton}"/>
+            <Button Grid.Column="2" Width="36" Height="32" Margin="6,0"
+                    Command="{Binding AddProfileCommand}" ToolTip="Thêm profile mới">
+                <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE710;" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Button>
+            <Button Grid.Column="3" Width="36" Height="32"
+                    Command="{Binding DeleteProfileCommand}" ToolTip="Xóa profile hiện tại"
+                    Style="{StaticResource DangerButton}">
+                <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE711;" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Button>
         </Grid>
 
         <!-- ═══ TAB CONTENT ═══ -->
         <TabControl Grid.Row="1">
 
             <!-- ─── Tab: Sync ─── -->
-            <TabItem Header="⚡ Đồng bộ">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE945;" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock Text="Đồng bộ" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,10,4,0">
                     <StackPanel>
 
                         <!-- Source -->
@@ -78,8 +94,10 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBox Grid.Column="0" Text="{Binding BackupPath, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
-                                    <Button Grid.Column="1" Content="📁" Width="36" Margin="6,0,0,0"
-                                            Command="{Binding BrowseCommand}"/>
+                                    <Button Grid.Column="1" Width="40" Margin="8,0,0,0"
+                                            Command="{Binding BrowseCommand}" ToolTip="Chọn thư mục nguồn">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xED25;" FontSize="14"/>
+                                    </Button>
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -89,7 +107,7 @@
                             <StackPanel>
                                 <Label Content="☁ Remote Path"/>
                                 <!-- Remote picker -->
-                                <Grid Margin="0,0,0,6">
+                                <Grid Margin="0,0,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
@@ -98,13 +116,15 @@
                                               ItemsSource="{Binding RcloneRemotes}"
                                               SelectedItem="{Binding SelectedRemote}"
                                               IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
-                                    <Button Grid.Column="1" Content="↻" Width="36" Margin="6,0,0,0"
+                                    <Button Grid.Column="1" Width="40" Margin="8,0,0,0"
                                             Command="{Binding LoadRemotesCommand}"
-                                            ToolTip="Tải danh sách remote từ rclone"/>
+                                            ToolTip="Tải danh sách remote từ rclone">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE72C;" FontSize="13"/>
+                                    </Button>
                                 </Grid>
                                 <!-- Manual path -->
                                 <Label Content="Hoặc nhập thủ công (vd: ggdrive:DB_Backup)" 
-                                       FontSize="11" Padding="0,0,0,2"/>
+                                       FontSize="11" Padding="0,0,0,4"/>
                                 <TextBox Text="{Binding RemotePath, UpdateSourceTrigger=PropertyChanged}"
                                          IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}"/>
                             </StackPanel>
@@ -118,34 +138,47 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
                                     <Label Content="🔄 Chế độ sync"/>
                                     <ComboBox ItemsSource="{Binding SyncModes}" 
                                               SelectedIndex="{Binding SelectedSyncMode}"/>
                                 </StackPanel>
 
-                                <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                    <Label Content="Tùy chọn"/>
-                                    <CheckBox Content="Bỏ qua file đã tồn tại" IsChecked="{Binding IgnoreExisting}"/>
-                                    <CheckBox Content="Dry Run (không copy thật)" IsChecked="{Binding DryRun}"/>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <Label Content="Tùy chọn nhanh"/>
+                                    <CheckBox Content="Bỏ qua file đã tồn tại (--ignore-existing)" IsChecked="{Binding IgnoreExisting}"/>
+                                    <CheckBox Content="Dry Run (chạy thử nghiệm)" IsChecked="{Binding DryRun}"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- Action Buttons -->
-                        <Border Style="{StaticResource CardPanel}">
+                        <Border Style="{StaticResource CardPanel}" Background="Transparent" BorderThickness="0" Padding="0" Margin="0,8">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Content="▶  Chạy Sync" Width="130" Margin="4,0"
-                                        Command="{Binding RunSyncCommand}" 
-                                        Style="{StaticResource SuccessButton}"/>
-                                <Button Content="■  Dừng" Width="100" Margin="4,0"
-                                        Command="{Binding CancelSyncCommand}" 
-                                        Style="{StaticResource DangerButton}"/>
-                                <Button Content="⚡  Test" Width="110" Margin="4,0"
-                                        Command="{Binding TestConnectionCommand}"/>
-                                <Button Content="✔  Lưu" Width="90" Margin="4,0"
-                                        Command="{Binding SaveConfigCommand}" 
-                                        Style="{StaticResource AccentButton}"/>
+                                <Button Width="140" Margin="6,0" Command="{Binding RunSyncCommand}" Style="{StaticResource SuccessButton}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE768;" Margin="0,0,8,0" VerticalAlignment="Center" FontWeight="Bold"/>
+                                        <TextBlock Text="Chạy Sync" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Width="110" Margin="6,0" Command="{Binding CancelSyncCommand}" Style="{StaticResource DangerButton}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE71A;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Dừng" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Width="120" Margin="6,0" Command="{Binding TestConnectionCommand}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xEA86;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Test Kết Nối" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Width="100" Margin="6,0" Command="{Binding SaveConfigCommand}" Style="{StaticResource AccentButton}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE74E;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Lưu" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </StackPanel>
                         </Border>
 
@@ -154,32 +187,34 @@
             </TabItem>
 
             <!-- ─── Tab: Rclone Options ─── -->
-            <TabItem Header="⚙ Cấu hình Rclone">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xEA80;" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock Text="Cấu hình Rclone" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,10,4,0">
                     <StackPanel>
 
                         <!-- Performance -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="🚀 Hiệu suất" FontWeight="Bold" FontSize="14" 
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
+                                <TextBlock Text="🚀 Hiệu suất &amp; Băng thông" FontWeight="Bold" FontSize="14" 
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition/>
-                                        <RowDefinition/>
-                                    </Grid.RowDefinitions>
 
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
                                         <Label Content="Transfers (1-32)"/>
                                         <TextBox Text="{Binding Transfers, UpdateSourceTrigger=PropertyChanged}"/>
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
                                         <Label Content="Checkers (1-64)"/>
                                         <TextBox Text="{Binding Checkers, UpdateSourceTrigger=PropertyChanged}"/>
                                     </StackPanel>
@@ -195,11 +230,11 @@
                         <!-- Logging -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="📋 Logging" FontWeight="Bold" FontSize="14"
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
-                                <Label Content="Log Level"/>
+                                <TextBlock Text="📋 Nhật ký chi tiết (Log)" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+                                <Label Content="Mức độ log (Log Level)"/>
                                 <ComboBox ItemsSource="{Binding LogLevels}" 
-                                          SelectedIndex="{Binding SelectedLogLevel}" Width="200"
+                                          SelectedIndex="{Binding SelectedLogLevel}" Width="220"
                                           HorizontalAlignment="Left"/>
                             </StackPanel>
                         </Border>
@@ -207,11 +242,11 @@
                         <!-- Extra Flags -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="🔧 Tham số bổ sung" FontWeight="Bold" FontSize="14"
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
-                                <Label Content="Extra rclone flags (thêm trực tiếp vào command)"/>
+                                <TextBlock Text="🔧 Tham số nâng cao" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+                                <Label Content="Các rclone flag bổ sung (thêm trực tiếp vào câu lệnh)"/>
                                 <TextBox Text="{Binding ExtraFlags, UpdateSourceTrigger=PropertyChanged}" 
-                                         Height="50" AcceptsReturn="True" TextWrapping="Wrap"
+                                         Height="55" AcceptsReturn="True" TextWrapping="Wrap"
                                          VerticalScrollBarVisibility="Auto"/>
                             </StackPanel>
                         </Border>
@@ -219,54 +254,63 @@
                         <!-- Watch Settings -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="👁 Theo dõi thư mục (Watch)" FontWeight="Bold" FontSize="14"
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,8"/>
-                                <CheckBox Content="Bật Watch khi Start" IsChecked="{Binding WatchEnabled}"/>
-                                <CheckBox Content="Đồng bộ tất cả file hiện có khi bắt đầu Watch" 
-                                          IsChecked="{Binding SyncOnStartWatch}" Margin="0,4,0,0"/>
+                                <TextBlock Text="👁 Theo dõi thư mục (Watch Mode)" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <CheckBox Content="Tự động bật Watch khi khởi động Sync" IsChecked="{Binding WatchEnabled}" Margin="0,0,24,0"/>
+                                    <CheckBox Content="Đồng bộ toàn bộ file khi bắt đầu Watch" IsChecked="{Binding SyncOnStartWatch}"/>
+                                </StackPanel>
 
-                                <Grid Margin="0,8,0,6">
+                                <Grid Margin="0,8,0,8">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
 
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
                                         <Label Content="⏱ Debounce (giây)"/>
                                         <TextBox Text="{Binding DebounceSec, UpdateSourceTrigger=PropertyChanged}"/>
-                                        <TextBlock Text="Chờ bao lâu sau file ready mới trigger backup"
+                                        <TextBlock Text="Thời gian chờ sau thay đổi file cuối"
                                                    FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
                                         <Label Content="🔒 Lock timeout (giây)"/>
                                         <TextBox Text="{Binding FileLockTimeoutSec, UpdateSourceTrigger=PropertyChanged}"/>
-                                        <TextBlock Text="Chờ tối đa bao lâu nếu file đang bị ghi"
+                                        <TextBlock Text="Thời gian chờ tối đa nếu file đang bị ghi"
                                                    FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="2">
-                                        <Label Content="🔁 Retry interval (ms)"/>
+                                        <Label Content="🔁 Thử lại sau (ms)"/>
                                         <TextBox Text="{Binding FileLockRetryMs, UpdateSourceTrigger=PropertyChanged}"/>
-                                        <TextBlock Text="Thử lại kiểm tra lock mỗi bao ms"
+                                        <TextBlock Text="Khoảng thời gian kiểm tra lại khóa file"
                                                    FontSize="10" Foreground="{StaticResource TextSecondaryBrush}"
-                                                   TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                                   TextWrapping="Wrap" Margin="0,4,0,0"/>
                                     </StackPanel>
                                 </Grid>
 
-                                <StackPanel Margin="0,6,0,0">
-                                    <Label Content="File filter (vd: *.bak;*.txt)"/>
+                                <StackPanel Margin="0,4,0,12">
+                                    <Label Content="Đầu lọc tệp tin (File Filter, ví dụ: *.bak;*.txt)"/>
                                     <TextBox Text="{Binding FileFilter, UpdateSourceTrigger=PropertyChanged}"/>
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                    <Button Content="👁 Start Watch" Width="120" Margin="0,0,8,0"
-                                            Command="{Binding StartWatchCommand}" Style="{StaticResource AccentButton}"/>
-                                    <Button Content="⏹ Stop Watch" Width="120"
-                                            Command="{Binding StopWatchCommand}" Style="{StaticResource DangerButton}"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Width="130" Margin="0,0,8,0" Command="{Binding StartWatchCommand}" Style="{StaticResource AccentButton}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE890;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Start Watch" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Width="130" Command="{Binding StopWatchCommand}" Style="{StaticResource DangerButton}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE71A;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Stop Watch" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -276,23 +320,32 @@
             </TabItem>
 
             <!-- ─── Tab: Log Backup ─── -->
-            <TabItem Header="📋 Log Backup">
-                <Grid Margin="0,8,0,0">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE9D9;" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock Text="Log Backup" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <Grid Margin="0,10,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
                     <!-- Toolbar -->
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
                         <TextBlock Text="📅 Ngày:" Foreground="{StaticResource TextSecondaryBrush}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <ComboBox MinWidth="160" ItemsSource="{Binding LogFiles}"
+                                   VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold"/>
+                        <ComboBox MinWidth="180" ItemsSource="{Binding LogFiles}"
                                   SelectedItem="{Binding SelectedLogFile}"
                                   Margin="0,0,10,0"/>
-                        <Button Content="🔄 Làm mới" Margin="0,0,10,0"
-                                Command="{Binding LoadBackupLogCommand}"
-                                Style="{StaticResource AccentButton}"/>
+                        <Button Command="{Binding LoadBackupLogCommand}" Style="{StaticResource AccentButton}" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE72C;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Làm mới" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                         <TextBlock Text="(tối đa 5000 dòng cuối)"
                                    Foreground="{StaticResource TextSecondaryBrush}"
                                    VerticalAlignment="Center" FontSize="11"/>
@@ -321,36 +374,44 @@
             </TabItem>
 
             <!-- ─── Tab: Cài đặt ─── -->
-            <TabItem Header="🛠 Cài đặt">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,8">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE825;" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{StaticResource AccentBlueBrush}"/>
+                        <TextBlock Text="Cài đặt" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,10,4,0">
                     <StackPanel>
 
                         <!-- Rclone -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="🔧 Rclone" FontWeight="Bold" FontSize="14"
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+                                <TextBlock Text="🔧 Quản lý Rclone" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,12"/>
 
                                 <!-- Path -->
-                                <Label Content="Đường dẫn rclone.exe (trống = tìm trong thư mục app)"/>
-                                <Grid Margin="0,0,0,8">
+                                <Label Content="Đường dẫn rclone.exe (trống = tự động tìm kiếm trong thư mục chạy app)"/>
+                                <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBox Grid.Column="0" Text="{Binding RclonePath, UpdateSourceTrigger=PropertyChanged}"
                                              IsEnabled="{Binding IsInstalling, Converter={StaticResource InverseBoolConverter}}"/>
-                                    <Button Grid.Column="1" Content="📁" Width="36" Margin="6,0,0,0"
-                                            Command="{Binding BrowseRcloneCommand}"/>
+                                    <Button Grid.Column="1" Width="40" Margin="8,0,0,0"
+                                            Command="{Binding BrowseRcloneCommand}" ToolTip="Chọn file rclone.exe">
+                                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xED25;" FontSize="14"/>
+                                    </Button>
                                 </Grid>
 
                                 <!-- Version info -->
-                                <Grid Margin="0,0,0,8">
+                                <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
                                         <Label Content="Phiên bản hiện tại"/>
                                         <TextBlock Text="{Binding RcloneCurrentVersion}" Foreground="{StaticResource AccentGreenBrush}" FontWeight="SemiBold"/>
                                     </StackPanel>
@@ -365,22 +426,35 @@
                                            FontSize="11" Margin="0,0,0,4"
                                            Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVisConverter}}"/>
                                 <ProgressBar Value="{Binding InstallProgress}" Minimum="0" Maximum="100"
-                                             Margin="0,0,0,8" Height="6"
+                                             Margin="0,0,0,10" Height="6"
                                              Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVisConverter}}"/>
 
                                 <!-- Action buttons -->
                                 <StackPanel Orientation="Horizontal">
-                                    <Button Content="📋 Kiểm tra phiên bản" Margin="0,0,8,0"
-                                            Command="{Binding CheckVersionCommand}"
-                                            Style="{StaticResource AccentButton}"/>
-                                    <Button Content="⬇ Tải &amp; Cài rclone" Margin="0,0,8,0"
-                                            Command="{Binding InstallRcloneCommand}"
-                                            Style="{StaticResource SuccessButton}"/>
-                                    <Button Content="⚙ Mở rclone config" Margin="0,0,8,0"
-                                            Command="{Binding OpenRcloneConfigCommand}"/>
-                                    <Button Content="📂 Mở thư mục config"
-                                            Command="{Binding OpenRcloneConfigDirCommand}"
-                                            ToolTip="Mở Explorer đến thư mục chứa file rclone.conf"/>
+                                    <Button Command="{Binding CheckVersionCommand}" Style="{StaticResource AccentButton}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE72C;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Kiểm tra phiên bản" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding InstallRcloneCommand}" Style="{StaticResource SuccessButton}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE896;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Tải &amp; Cài rclone" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding OpenRcloneConfigCommand}" Margin="0,0,8,0">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE713;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Mở rclone config" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Command="{Binding OpenRcloneConfigDirCommand}" ToolTip="Mở Explorer đến thư mục chứa file rclone.conf">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xED25;" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Mở thư mục config" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -388,15 +462,15 @@
                         <!-- App Settings -->
                         <Border Style="{StaticResource CardPanel}">
                             <StackPanel>
-                                <TextBlock Text="🖥 Ứng dụng" FontWeight="Bold" FontSize="14"
-                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,10"/>
+                                <TextBlock Text="🖥 Thiết lập ứng dụng" FontWeight="Bold" FontSize="14"
+                                           Foreground="{StaticResource AccentBlueBrush}" Margin="0,0,0,12"/>
 
-                                <CheckBox Content="Ẩn xuống System Tray khi thu nhỏ hoặc đóng"
-                                          IsChecked="{Binding MinimizeToTray}" Margin="0,0,0,4"/>
-                                <CheckBox Content="Khởi động ở chế độ thu nhỏ"
-                                          IsChecked="{Binding StartMinimized}" Margin="0,0,0,4"/>
-                                <CheckBox Content="Chạy cùng Windows (ghi vào registry)"
-                                          IsChecked="{Binding RunOnStartup}" Margin="0,0,0,12"/>
+                                <CheckBox Content="Ẩn xuống System Tray khi thu nhỏ hoặc đóng cửa sổ"
+                                          IsChecked="{Binding MinimizeToTray}" Margin="0,0,0,6"/>
+                                <CheckBox Content="Khởi động ứng dụng ở chế độ thu nhỏ"
+                                          IsChecked="{Binding StartMinimized}" Margin="0,0,0,6"/>
+                                <CheckBox Content="Khởi động cùng Windows (Ghi vào Registry)"
+                                          IsChecked="{Binding RunOnStartup}" Margin="0,0,0,14"/>
 
                                 <Button Content="💾 Lưu cài đặt" HorizontalAlignment="Left"
                                         Command="{Binding SaveAppSettingsCommand}"
@@ -412,7 +486,7 @@
 
         <!-- ═══ SEPARATOR ═══ -->
         <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch"
-                      Background="{StaticResource BorderBrush}" Margin="0,4"/>
+                      Background="{StaticResource BorderBrush}" Margin="0,6"/>
 
         <!-- ═══ LOG OUTPUT ═══ -->
         <Border Grid.Row="3" Style="{StaticResource CardPanel}">
@@ -422,26 +496,38 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" Margin="0,0,0,6">
-                    <TextBlock Text="📝 Output" FontWeight="Bold" FontSize="13"
-                               Foreground="{StaticResource AccentBlueBrush}"/>
-                    <Button Content="🗑 Clear" HorizontalAlignment="Right" Width="70" Height="24"
-                            FontSize="11" Padding="8,2" Command="{Binding ClearLogCommand}"/>
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xEC7A;" FontSize="14" Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock Text="Output Terminal log" FontWeight="Bold" FontSize="13"
+                                   Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Button HorizontalAlignment="Right" Width="80" Height="26" FontSize="11.5" Command="{Binding ClearLogCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE74D;" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Clear" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </Grid>
 
                 <ListBox Grid.Row="1" ItemsSource="{Binding LogEntries}" 
                          Background="{StaticResource BgMediumBrush}"
-                         Foreground="{StaticResource TextPrimaryBrush}"
                          BorderBrush="{StaticResource BorderBrush}"
                          BorderThickness="1" FontFamily="Consolas" FontSize="11.5"
                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                         x:Name="LogListBox"/>
+                         x:Name="LogListBox">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" Foreground="{Binding Converter={StaticResource LogEntryColorConverter}}"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Grid>
         </Border>
 
         <!-- ═══ STATUS BAR ═══ -->
-        <Border Grid.Row="4" Background="{StaticResource BgMediumBrush}" CornerRadius="4" 
-                Padding="12,6" Margin="0,6,0,0">
+        <Border Grid.Row="4" Background="{StaticResource BgMediumBrush}" CornerRadius="6" 
+                Padding="14,8" Margin="0,8,0,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -451,17 +537,17 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="{Binding StatusText}" 
-                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                            Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" FontWeight="SemiBold"/>
 
                 <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="12,0"
-                           Foreground="{StaticResource TextSecondaryBrush}">
+                            Foreground="{StaticResource TextSecondaryBrush}">
                     <Run Text="Sync cuối: "/><Run Text="{Binding LastSyncTime, Mode=OneWay}"/>
                 </TextBlock>
 
-                <Border Grid.Column="3" CornerRadius="8" Padding="8,2"
+                <Border Grid.Column="3" CornerRadius="4" Padding="10,3"
                         Background="{Binding IsWatching, Converter={StaticResource WatchStatusBrushConverter}}">
                     <TextBlock Text="{Binding IsWatching, Converter={StaticResource WatchStatusTextConverter}}"
-                               FontSize="11" FontWeight="SemiBold"/>
+                               FontSize="11" FontWeight="Bold" Foreground="#FF121220"/>
                 </Border>
             </Grid>
         </Border>

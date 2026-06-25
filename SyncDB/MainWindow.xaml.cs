@@ -16,12 +16,18 @@ namespace SyncDB
         {
             InitializeComponent();
 
-            // Auto-scroll log
+            // Auto-scroll log với độ ưu tiên Background giúp hoãn việc cuộn cho đến khi UI rảnh rỗi, tránh giật lag khi có nhiều log
             var vm = (MainViewModel)DataContext;
             vm.LogEntries.CollectionChanged += (s, e) =>
             {
                 if (LogListBox.Items.Count > 0)
-                    LogListBox.ScrollIntoView(LogListBox.Items[LogListBox.Items.Count - 1]);
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (LogListBox.Items.Count > 0)
+                            LogListBox.ScrollIntoView(LogListBox.Items[LogListBox.Items.Count - 1]);
+                    }), System.Windows.Threading.DispatcherPriority.Background);
+                }
             };
 
             InitTray();
