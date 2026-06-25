@@ -77,6 +77,38 @@
         </Setter>
     </Style>
 
+    <ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
+        <Grid x:Name="Bg" SnapsToDevicePixels="true" Background="Transparent">
+            <Track x:Name="PART_Track" IsDirectionReversed="true" IsEnabled="{TemplateBinding IsEnabled}">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Focusable="false" Opacity="0"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Focusable="false" Opacity="0"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollBarThumb}" Width="6" Margin="1,0"/>
+                </Track.Thumb>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
+        <Grid x:Name="Bg" SnapsToDevicePixels="true" Background="Transparent">
+            <Track x:Name="PART_Track" IsEnabled="{TemplateBinding IsEnabled}">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageLeftCommand}" Focusable="false" Opacity="0"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageRightCommand}" Focusable="false" Opacity="0"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollBarThumb}" Height="6" Margin="0,1"/>
+                </Track.Thumb>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+
     <Style TargetType="ScrollBar">
         <Setter Property="Stylus.IsPressAndHoldEnabled" Value="false"/>
         <Setter Property="Stylus.IsFlicksEnabled" Value="false"/>
@@ -84,51 +116,15 @@
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Width" Value="8"/>
         <Setter Property="MinHeight" Value="20"/>
-        <Setter Property="Template">
-            <Setter.Value>
-                <ControlTemplate TargetType="ScrollBar">
-                    <Grid x:Name="Bg" SnapsToDevicePixels="true" Background="{TemplateBinding Background}">
-                        <Track x:Name="PART_Track" IsDirectionReversed="true" IsEnabled="{TemplateBinding IsEnabled}">
-                            <Track.DecreaseRepeatButton>
-                                <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}" Focusable="false" Opacity="0"/>
-                            </Track.DecreaseRepeatButton>
-                            <Track.IncreaseRepeatButton>
-                                <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}" Focusable="false" Opacity="0"/>
-                            </Track.IncreaseRepeatButton>
-                            <Track.Thumb>
-                                <Thumb Style="{StaticResource ScrollBarThumb}" Width="6" Margin="1,0"/>
-                            </Track.Thumb>
-                        </Track>
-                    </Grid>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="Orientation" Value="Horizontal">
-                            <Setter Property="Width" Value="Auto"/>
-                            <Setter Property="Height" Value="8"/>
-                            <Setter Property="MinWidth" Value="20"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="ScrollBar">
-                                        <Grid x:Name="Bg" SnapsToDevicePixels="true" Background="{TemplateBinding Background}">
-                                            <Track x:Name="PART_Track" IsEnabled="{TemplateBinding IsEnabled}">
-                                                <Track.DecreaseRepeatButton>
-                                                    <RepeatButton Command="{x:Static ScrollBar.PageLeftCommand}" Focusable="false" Opacity="0"/>
-                                                </Track.DecreaseRepeatButton>
-                                                <Track.IncreaseRepeatButton>
-                                                    <RepeatButton Command="{x:Static ScrollBar.PageRightCommand}" Focusable="false" Opacity="0"/>
-                                                </Track.IncreaseRepeatButton>
-                                                <Track.Thumb>
-                                                    <Thumb Style="{StaticResource ScrollBarThumb}" Height="6" Margin="0,1"/>
-                                                </Track.Thumb>
-                                            </Track>
-                                        </Grid>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate>
-            </Setter.Value>
-        </Setter>
+        <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}"/>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="MinWidth" Value="20"/>
+                <Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}"/>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- ═══ TextBox ═══ -->

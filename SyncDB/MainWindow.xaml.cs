@@ -22,11 +22,11 @@ namespace SyncDB
             {
                 if (LogListBox.Items.Count > 0)
                 {
-                    Dispatcher.BeginInvoke(new Action(() =>
+                    Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
                     {
                         if (LogListBox.Items.Count > 0)
                             LogListBox.ScrollIntoView(LogListBox.Items[LogListBox.Items.Count - 1]);
-                    }), System.Windows.Threading.DispatcherPriority.Background);
+                    }));
                 }
             };
 
