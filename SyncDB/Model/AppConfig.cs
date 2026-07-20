@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.ComponentModel;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 
@@ -24,6 +25,7 @@ namespace SyncDB.Model
         public string Name { get; set; } = "Default";
         public string BackupPath { get; set; } = "";
         public string RemotePath { get; set; } = "";
+        public List<BackupTaskItem> Tasks { get; set; } = new List<BackupTaskItem>();
 
         [JsonConverter(typeof(StringEnumConverter))]
         public RcloneSyncMode SyncMode { get; set; } = RcloneSyncMode.Copy;
@@ -52,6 +54,69 @@ namespace SyncDB.Model
         // Schedule
         public bool ScheduleEnabled { get; set; }
         public int ScheduleIntervalMin { get; set; } = 60;
+    }
+
+    public class BackupTaskItem : INotifyPropertyChanged
+    {
+        private string _source = "";
+        public string Source
+        {
+            get => _source;
+            set
+            {
+                if (_source != value)
+                {
+                    _source = value;
+                    OnPropertyChanged(nameof(Source));
+                }
+            }
+        }
+
+        private string _destination = "";
+        public string Destination
+        {
+            get => _destination;
+            set
+            {
+                if (_destination != value)
+                {
+                    _destination = value;
+                    OnPropertyChanged(nameof(Destination));
+                }
+            }
+        }
+
+        private RcloneSyncMode _syncMode = RcloneSyncMode.Copy;
+        [JsonConverter(typeof(StringEnumConverter))]
+        public RcloneSyncMode SyncMode
+        {
+            get => _syncMode;
+            set
+            {
+                if (_syncMode != value)
+                {
+                    _syncMode = value;
+                    OnPropertyChanged(nameof(SyncMode));
+                }
+            }
+        }
+
+        private string _fileFilter = "*.*";
+        public string FileFilter
+        {
+            get => _fileFilter;
+            set
+            {
+                if (_fileFilter != value)
+                {
+                    _fileFilter = value;
+                    OnPropertyChanged(nameof(FileFilter));
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
     public enum RcloneSyncMode

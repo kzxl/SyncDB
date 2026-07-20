@@ -7,13 +7,18 @@ using System.Timers;
 
 namespace SyncDB.Service
 {
+    public class WatcherTarget
+    {
+        public string Path { get; set; } = "";
+        public string Filter { get; set; } = "*.*";
+    }
+
     public class WatcherService : IDisposable
     {
-        private FileSystemWatcher _watcher;
+        private List<FileSystemWatcher> _watchers;
         private System.Timers.Timer _debounceTimer;
         private string _lastDetectedFile;
         private DateTime _lastDetectTime;
-        private HashSet<string> _filters;
 
         private int _lockTimeoutSec = 60;
         private int _lockRetryMs = 500;
@@ -22,39 +27,42 @@ namespace SyncDB.Service
         public event Action DebounceTrigger;
         public event Action<string> LogMessage; // để gửi timing log về UI
 
-        public bool IsWatching => _watcher != null;
+        public bool IsWatching => _watchers != null && _watchers.Count > 0;
 
-        public void Start(string path, string filterPattern, int debounceSec,
+        public void Start(List<WatcherTarget> targets, int debounceSec,
                           int lockTimeoutSec = 60, int lockRetryMs = 500)
         {
             Stop();
 
-            if (!Directory.Exists(path)) return;
+            if (targets == null || targets.Count == 0) return;
 
             _lockTimeoutSec = lockTimeoutSec;
             _lockRetryMs = lockRetryMs;
 
-            _filters = new HashSet<string>(
-                filterPattern
-                    .Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(f => f.Trim().TrimStart('*').ToLower()),
-                StringComparer.OrdinalIgnoreCase);
+            _watchers = new List<FileSystemWatcher>();
 
-            _watcher = new FileSystemWatcher(path)
+            foreach (var target in targets)
             {
-                IncludeSubdirectories = true,
-                Filter = "*.*",
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.DirectoryName
-            };
+                var p = target.Path;
+                if (!Directory.Exists(p)) continue;
 
-            _watcher.Created += OnChanged;
-            _watcher.Changed += OnChanged;
+                var w = new FileSystemWatcher(p)
+                {
+                    IncludeSubdirectories = true,
+                    Filter = "*.*",
+                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.Size | NotifyFilters.DirectoryName
+                };
+
+                w.Created += (s, e) => OnChanged(target, e);
+                w.Changed += (s, e) => OnChanged(target, e);
+                w.EnableRaisingEvents = true;
+
+                _watchers.Add(w);
+            }
 
             _debounceTimer = new System.Timers.Timer(debounceSec * 1000);
             _debounceTimer.AutoReset = false;
             _debounceTimer.Elapsed += OnDebounceElapsed;
-
-            _watcher.EnableRaisingEvents = true;
         }
 
         public void Stop()
@@ -67,23 +75,35 @@ namespace SyncDB.Service
                 _debounceTimer = null;
             }
 
-            if (_watcher != null)
+            if (_watchers != null)
             {
-                _watcher.EnableRaisingEvents = false;
-                _watcher.Created -= OnChanged;
-                _watcher.Changed -= OnChanged;
-                _watcher.Dispose();
-                _watcher = null;
+                foreach (var w in _watchers)
+                {
+                    w.EnableRaisingEvents = false;
+                    w.Dispose();
+                }
+                _watchers.Clear();
+                _watchers = null;
             }
 
             _lastDetectedFile = null;
         }
 
-        private void OnChanged(object sender, FileSystemEventArgs e)
+        private void OnChanged(WatcherTarget target, FileSystemEventArgs e)
         {
             var ext = Path.GetExtension(e.FullPath).ToLower();
-            if (_filters != null && _filters.Count > 0 && !_filters.Contains(ext))
-                return;
+            
+            // Tự lọc theo filter riêng của target
+            var filter = (target.Filter ?? "").Trim();
+            if (!string.IsNullOrEmpty(filter) && filter != "*.*" && filter != "*")
+            {
+                var parts = filter.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(f => f.Trim().TrimStart('*').ToLower())
+                                  .ToList();
+
+                if (!parts.Contains(ext))
+                    return; // File thay đổi không khớp filter của task này
+            }
 
             var detectTime = DateTime.Now;
             LogMessage?.Invoke($"📁 [{detectTime:HH:mm:ss}] Phát hiện: {Path.GetFileName(e.FullPath)} — kiểm tra file lock...");

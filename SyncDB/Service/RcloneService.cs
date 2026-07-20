@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -211,54 +212,115 @@ namespace SyncDB.Service
 
                 var logFile = GetDailyLogPath();
 
-                // Ghi header log
-                File.AppendAllText(logFile,
-                    "\r\n===== RUN " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " =====\r\n");
+                var tasks = profile.Tasks ?? new List<BackupTaskItem>();
 
-                var args = BuildArguments(profile, logFile);
-                OutputReceived?.Invoke("▶ rclone " + args);
-
-                var psi = new ProcessStartInfo
+                // Tương thích ngược: Nếu Tasks rỗng, tự tạo từ BackupPath/RemotePath
+                if (tasks.Count == 0 && (!string.IsNullOrEmpty(profile.BackupPath) || !string.IsNullOrEmpty(profile.RemotePath)))
                 {
-                    FileName = _rcloneExe,
-                    Arguments = args,
-                    CreateNoWindow = true,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    WorkingDirectory = Path.GetDirectoryName(_rcloneExe)
-                };
+                    tasks.Add(new BackupTaskItem { Source = profile.BackupPath, Destination = profile.RemotePath });
+                }
 
-                _currentProcess = Process.Start(psi);
-                if (_currentProcess == null)
+                // Lọc các task hợp lệ (không trống cả nguồn lẫn đích)
+                var validTasks = tasks.Where(t => !string.IsNullOrWhiteSpace(t.Source) && !string.IsNullOrWhiteSpace(t.Destination)).ToList();
+
+                if (validTasks.Count == 0)
                 {
-                    OutputReceived?.Invoke("✖ Không thể start rclone process");
+                    OutputReceived?.Invoke("⚠ Không có task đồng bộ hợp lệ (nguồn và đích không được trống).");
+                    ProcessExited?.Invoke(-1);
                     return;
                 }
 
-                // Stream output real-time
-                _currentProcess.OutputDataReceived += (s, e) =>
+                int overallExitCode = 0;
+                int taskIndex = 1;
+                int totalTasks = validTasks.Count;
+
+                foreach (var task in validTasks)
                 {
-                    if (e.Data != null) OutputReceived?.Invoke(e.Data);
-                };
-                _currentProcess.ErrorDataReceived += (s, e) =>
-                {
-                    if (e.Data != null) OutputReceived?.Invoke(e.Data);
-                };
-                _currentProcess.BeginOutputReadLine();
-                _currentProcess.BeginErrorReadLine();
+                    if (_cts != null && _cts.Token.IsCancellationRequested)
+                    {
+                        OutputReceived?.Invoke("⚠ Đã hủy bởi người dùng");
+                        break;
+                    }
 
-                await Task.Run(() => _currentProcess.WaitForExit());
+                    var source = task.Source.Trim();
+                    var destination = task.Destination.Trim();
 
-                var exitCode = _currentProcess.ExitCode;
-                ProcessExited?.Invoke(exitCode);
+                    // Xử lý tạo thư mục con trên đích nếu có nhiều task để tránh lẫn lộn file
+                    string finalDest = destination;
+                    if (validTasks.Count > 1)
+                    {
+                        try
+                        {
+                            string folderName = Path.GetFileName(source.TrimEnd('\\', '/'));
+                            if (!string.IsNullOrEmpty(folderName))
+                            {
+                                finalDest = destination.Contains(":") 
+                                    ? (destination.TrimEnd('/') + "/" + folderName) 
+                                    : Path.Combine(destination, folderName);
+                            }
+                        }
+                        catch { }
+                    }
 
-                OutputReceived?.Invoke(exitCode == 0
-                    ? "✔ Hoàn thành (exit code 0)"
-                    : "✖ Kết thúc với exit code " + exitCode);
+                    // Ghi header log cho cặp hiện tại
+                    File.AppendAllText(logFile,
+                        $"\r\n===== RUN ({taskIndex}/{totalTasks}) {DateTime.Now:yyyy-MM-dd HH:mm:ss} | {source} -> {finalDest} =====\r\n");
 
-                // Ghi log kết quả
-                AppendLog("Rclone exit code: " + exitCode);
+                    var args = BuildArguments(profile, task, source, finalDest, logFile);
+                    OutputReceived?.Invoke($"▶ [{taskIndex}/{totalTasks}] rclone {args}");
+
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = _rcloneExe,
+                        Arguments = args,
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        WorkingDirectory = Path.GetDirectoryName(_rcloneExe)
+                    };
+
+                    _currentProcess = Process.Start(psi);
+                    if (_currentProcess == null)
+                    {
+                        OutputReceived?.Invoke($"✖ Không thể start rclone process cho task {taskIndex}");
+                        overallExitCode = -1;
+                        taskIndex++;
+                        continue;
+                    }
+
+                    // Stream output real-time
+                    _currentProcess.OutputDataReceived += (s, e) =>
+                    {
+                        if (e.Data != null) OutputReceived?.Invoke(e.Data);
+                    };
+                    _currentProcess.ErrorDataReceived += (s, e) =>
+                    {
+                        if (e.Data != null) OutputReceived?.Invoke(e.Data);
+                    };
+                    _currentProcess.BeginOutputReadLine();
+                    _currentProcess.BeginErrorReadLine();
+
+                    await Task.Run(() => _currentProcess.WaitForExit());
+
+                    var exitCode = _currentProcess.ExitCode;
+                    if (exitCode != 0)
+                    {
+                        overallExitCode = exitCode;
+                    }
+
+                    OutputReceived?.Invoke(exitCode == 0
+                        ? $"✔ Hoàn thành task {taskIndex}/{totalTasks} (exit code 0)"
+                        : $"✖ Task {taskIndex}/{totalTasks} kết thúc với exit code {exitCode}");
+
+                    AppendLog($"Source: {source} -> Dest: {finalDest} | Exit code: {exitCode}");
+                    taskIndex++;
+                }
+
+                ProcessExited?.Invoke(overallExitCode);
+                OutputReceived?.Invoke(overallExitCode == 0
+                    ? "✔ Đồng bộ toàn bộ hoàn thành thành công!"
+                    : "✖ Đồng bộ hoàn thành với một số lỗi (exit code " + overallExitCode + ")");
             }
             catch (OperationCanceledException)
             {
@@ -287,11 +349,11 @@ namespace SyncDB.Service
             catch { }
         }
 
-        private string BuildArguments(SyncProfile profile, string logFile)
+        private string BuildArguments(SyncProfile profile, BackupTaskItem task, string source, string destination, string logFile)
         {
             var sb = new StringBuilder();
-            sb.Append(profile.SyncMode.ToString().ToLower());
-            sb.AppendFormat(" \"{0}\" {1}", profile.BackupPath, profile.RemotePath);
+            sb.Append(task.SyncMode.ToString().ToLower());
+            sb.AppendFormat(" \"{0}\" \"{1}\"", source, destination);
 
             if (profile.IgnoreExisting) sb.Append(" --ignore-existing");
             if (profile.DryRun) sb.Append(" --dry-run");
@@ -302,6 +364,21 @@ namespace SyncDB.Service
 
             sb.AppendFormat(" --log-file=\"{0}\" --log-level {1}", logFile, profile.LogLevel);
             sb.Append(" --stats 1s --stats-log-level NOTICE");
+
+            // Xử lý bộ lọc tệp tin riêng của Task
+            var filter = (task.FileFilter ?? "").Trim();
+            if (!string.IsNullOrEmpty(filter) && filter != "*.*" && filter != "*")
+            {
+                var parts = filter.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(p => p.Trim())
+                                  .Where(p => !string.IsNullOrEmpty(p))
+                                  .ToList();
+
+                foreach (var part in parts)
+                {
+                    sb.AppendFormat(" --include \"{0}\"", part);
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(profile.ExtraFlags))
                 sb.Append(" " + profile.ExtraFlags.Trim());

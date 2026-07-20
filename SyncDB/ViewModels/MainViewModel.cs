@@ -51,14 +51,28 @@ namespace SyncDB.ViewModels
         public string BackupPath
         {
             get { return _backupPath; }
-            set { if (SetProperty(ref _backupPath, value) && SelectedProfile != null) SelectedProfile.BackupPath = value; }
+            set
+            {
+                if (SetProperty(ref _backupPath, value))
+                {
+                    if (SelectedProfile != null) SelectedProfile.BackupPath = value;
+                    ValidateProfile();
+                }
+            }
         }
 
         private string _remotePath = "";
         public string RemotePath
         {
             get { return _remotePath; }
-            set { if (SetProperty(ref _remotePath, value) && SelectedProfile != null) SelectedProfile.RemotePath = value; }
+            set
+            {
+                if (SetProperty(ref _remotePath, value))
+                {
+                    if (SelectedProfile != null) SelectedProfile.RemotePath = value;
+                    ValidateProfile();
+                }
+            }
         }
 
         private int _selectedSyncMode;
@@ -145,7 +159,15 @@ namespace SyncDB.ViewModels
         public string FileFilter
         {
             get { return _fileFilter; }
-            set { if (SetProperty(ref _fileFilter, value) && SelectedProfile != null) SelectedProfile.FileFilter = value; }
+            set
+            {
+                if (SetProperty(ref _fileFilter, value))
+                {
+                    if (SelectedProfile != null) SelectedProfile.FileFilter = value;
+                    UpdateCheckboxesFromFileFilter();
+                    ValidateProfile();
+                }
+            }
         }
 
         private int _fileLockTimeoutSec = 60;
@@ -168,6 +190,53 @@ namespace SyncDB.ViewModels
             get { return _syncOnStartWatch; }
             set { if (SetProperty(ref _syncOnStartWatch, value) && SelectedProfile != null) SelectedProfile.SyncOnStartWatch = value; }
         }
+
+        // ═══ Profile Validation & Error ═══
+        private string _profileError = "";
+        public string ProfileError
+        {
+            get => _profileError;
+            set => SetProperty(ref _profileError, value);
+        }
+
+        private bool _hasProfileError = false;
+        public bool HasProfileError
+        {
+            get => _hasProfileError;
+            set => SetProperty(ref _hasProfileError, value);
+        }
+
+        public bool CanChangeProfile => !IsRunning && !IsWatching;
+
+        // ═══ Rename Profile ═══
+        private bool _isRenamingProfile = false;
+        public bool IsRenamingProfile
+        {
+            get => _isRenamingProfile;
+            set => SetProperty(ref _isRenamingProfile, value);
+        }
+
+        private string _newProfileName = "";
+        public string NewProfileName
+        {
+            get => _newProfileName;
+            set => SetProperty(ref _newProfileName, value);
+        }
+
+        // ═══ Backup Tasks list ═══
+        private ObservableCollection<BackupTaskItem> _backupTasks = new ObservableCollection<BackupTaskItem>();
+        public ObservableCollection<BackupTaskItem> BackupTasks
+        {
+            get => _backupTasks;
+            set => SetProperty(ref _backupTasks, value);
+        }
+
+        // ═══ Real-time Sync Queue ═══
+        public ObservableCollection<QueueItem> SyncQueue { get; } = new ObservableCollection<QueueItem>();
+
+        // ═══ File Extensions filter options ═══
+        public ObservableCollection<FileExtensionOption> FileExtensionOptions { get; set; }
+        private bool _isUpdatingFileFilter = false;
 
         // ═══ Settings Tab — Rclone ═══
         private string _rclonePath = "";
@@ -239,14 +308,26 @@ namespace SyncDB.ViewModels
         public bool IsRunning
         {
             get { return _isRunning; }
-            set { SetProperty(ref _isRunning, value); }
+            set
+            {
+                if (SetProperty(ref _isRunning, value))
+                {
+                    OnPropertyChanged(nameof(CanChangeProfile));
+                }
+            }
         }
 
         private bool _isWatching;
         public bool IsWatching
         {
             get { return _isWatching; }
-            set { SetProperty(ref _isWatching, value); }
+            set
+            {
+                if (SetProperty(ref _isWatching, value))
+                {
+                    OnPropertyChanged(nameof(CanChangeProfile));
+                }
+            }
         }
 
         private string _statusText = "Sẵn sàng";
@@ -294,6 +375,15 @@ namespace SyncDB.ViewModels
         public ICommand SaveAppSettingsCommand { get; }
         public ICommand LoadRemotesCommand { get; }
         public ICommand LoadBackupLogCommand { get; }
+        public ICommand AddTaskCommand { get; }
+        public ICommand DeleteTaskCommand { get; }
+        public ICommand AddTaskWithFolderCommand { get; }
+        public ICommand ScanExtensionsCommand { get; }
+        public ICommand ClearQueueCommand { get; }
+        
+        public ICommand StartRenameProfileCommand { get; }
+        public ICommand SaveRenameProfileCommand { get; }
+        public ICommand CancelRenameProfileCommand { get; }
 
         // ═══ Rclone Remotes ═══
         private ObservableCollection<string> _rcloneRemotes = new ObservableCollection<string>();
@@ -358,6 +448,20 @@ namespace SyncDB.ViewModels
             _rcloneService = new RcloneService(appPath, _appConfig.RclonePath);
             _watcherService = new WatcherService();
 
+            FileExtensionOptions = new ObservableCollection<FileExtensionOption>
+            {
+                new FileExtensionOption("*.*", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".bak", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".sql", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".zip", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".rar", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".7z", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".mdf", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".ldf", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".txt", UpdateFileFilterFromCheckboxes),
+                new FileExtensionOption(".log", UpdateFileFilterFromCheckboxes)
+            };
+
             _rcloneService.OutputReceived += OnOutputReceived;
             _rcloneService.ProcessExited += code =>
             {
@@ -408,6 +512,59 @@ namespace SyncDB.ViewModels
             SaveAppSettingsCommand = new RelayCommand(SaveAppSettings);
             LoadRemotesCommand = new RelayCommand(async () => await LoadRemotesAsync());
             LoadBackupLogCommand = new RelayCommand(async () => await LoadBackupLogAsync());
+            AddTaskCommand = new RelayCommand(AddTask);
+            DeleteTaskCommand = new RelayCommand(param => DeleteTask(param as BackupTaskItem));
+            AddTaskWithFolderCommand = new RelayCommand(AddTaskWithFolder);
+            ScanExtensionsCommand = new RelayCommand(async () => await ScanExtensionsAsync());
+            ClearQueueCommand = new RelayCommand(() => SyncQueue.Clear());
+
+            StartRenameProfileCommand = new RelayCommand(() =>
+            {
+                if (SelectedProfile != null)
+                {
+                    NewProfileName = SelectedProfile.Name;
+                    IsRenamingProfile = true;
+                }
+            });
+
+            SaveRenameProfileCommand = new RelayCommand(() =>
+            {
+                if (SelectedProfile == null) return;
+                var trimmed = (NewProfileName ?? "").Trim();
+                if (string.IsNullOrEmpty(trimmed))
+                {
+                    MessageBox.Show("Tên profile không được để trống.", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                foreach (var p in Profiles)
+                {
+                    if (p != SelectedProfile && string.Equals(p.Name, trimmed, StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show("Tên profile đã tồn tại.", "Cảnh báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+                }
+
+                var current = SelectedProfile;
+                var idx = Profiles.IndexOf(current);
+                if (idx >= 0)
+                {
+                    current.Name = trimmed;
+                    Profiles[idx] = null;
+                    Profiles[idx] = current;
+                    SelectedProfile = current;
+                }
+
+                IsRenamingProfile = false;
+                SaveConfig();
+                AddLog($"✏ Đổi tên profile thành: {trimmed}");
+            });
+
+            CancelRenameProfileCommand = new RelayCommand(() =>
+            {
+                IsRenamingProfile = false;
+            });
 
             LoadConfig();
 
@@ -443,6 +600,21 @@ namespace SyncDB.ViewModels
 
         private void SaveConfig()
         {
+            if (SelectedProfile != null)
+            {
+                SelectedProfile.Tasks = BackupTasks.ToList();
+                // Đồng bộ ngược BackupPath/RemotePath để tương thích với cấu hình cũ nếu cần
+                if (BackupTasks.Count > 0)
+                {
+                    SelectedProfile.BackupPath = string.Join(Environment.NewLine, BackupTasks.Select(t => t.Source));
+                    SelectedProfile.RemotePath = string.Join(Environment.NewLine, BackupTasks.Select(t => t.Destination));
+                }
+                else
+                {
+                    SelectedProfile.BackupPath = "";
+                    SelectedProfile.RemotePath = "";
+                }
+            }
             _appConfig.Profiles = Profiles.ToList();
             _appConfig.ActiveProfileIndex = Profiles.IndexOf(SelectedProfile);
             _configService.Save(_appConfig);
@@ -485,23 +657,232 @@ namespace SyncDB.ViewModels
             if (SelectedProfile == null) return;
             var p = SelectedProfile;
 
-            BackupPath = p.BackupPath;
-            RemotePath = p.RemotePath;
-            SelectedSyncMode = (int)p.SyncMode;
-            IgnoreExisting = p.IgnoreExisting;
-            DryRun = p.DryRun;
-            Transfers = p.Transfers;
-            Checkers = p.Checkers;
-            BandwidthLimit = p.BandwidthLimit;
-            SelectedLogLevel = LogLevels.IndexOf(p.LogLevel);
-            if (SelectedLogLevel < 0) SelectedLogLevel = 1;
-            ExtraFlags = p.ExtraFlags;
-            WatchEnabled = p.WatchEnabled;
-            DebounceSec = p.DebounceSec;
-            FileFilter = p.FileFilter;
-            FileLockTimeoutSec = p.FileLockTimeoutSec;
-            FileLockRetryMs = p.FileLockRetryMs;
-            SyncOnStartWatch = p.SyncOnStartWatch;
+            _backupPath = p.BackupPath;
+            _remotePath = p.RemotePath;
+            _selectedSyncMode = (int)p.SyncMode;
+            _ignoreExisting = p.IgnoreExisting;
+            _dryRun = p.DryRun;
+            _transfers = p.Transfers;
+            _checkers = p.Checkers;
+            _bandwidthLimit = p.BandwidthLimit;
+            _selectedLogLevel = LogLevels.IndexOf(p.LogLevel);
+            if (_selectedLogLevel < 0) _selectedLogLevel = 1;
+            _extraFlags = p.ExtraFlags;
+            _watchEnabled = p.WatchEnabled;
+            _debounceSec = p.DebounceSec;
+            _fileFilter = p.FileFilter;
+            _fileLockTimeoutSec = p.FileLockTimeoutSec;
+            _fileLockRetryMs = p.FileLockRetryMs;
+            _syncOnStartWatch = p.SyncOnStartWatch;
+
+            OnPropertyChanged(nameof(BackupPath));
+            OnPropertyChanged(nameof(RemotePath));
+            OnPropertyChanged(nameof(SelectedSyncMode));
+            OnPropertyChanged(nameof(IgnoreExisting));
+            OnPropertyChanged(nameof(DryRun));
+            OnPropertyChanged(nameof(Transfers));
+            OnPropertyChanged(nameof(Checkers));
+            OnPropertyChanged(nameof(BandwidthLimit));
+            OnPropertyChanged(nameof(SelectedLogLevel));
+            OnPropertyChanged(nameof(ExtraFlags));
+            OnPropertyChanged(nameof(WatchEnabled));
+            OnPropertyChanged(nameof(DebounceSec));
+            OnPropertyChanged(nameof(FileFilter));
+            OnPropertyChanged(nameof(FileLockTimeoutSec));
+            OnPropertyChanged(nameof(FileLockRetryMs));
+            OnPropertyChanged(nameof(SyncOnStartWatch));
+
+            // Nạp danh sách BackupTasks từ Profile
+            BackupTasks.Clear();
+            if (p.Tasks != null && p.Tasks.Count > 0)
+            {
+                foreach (var t in p.Tasks)
+                {
+                    // Nếu là task cũ chưa có filter hay sync mode riêng, map từ profile sang
+                    if (t.SyncMode == RcloneSyncMode.Copy && t.FileFilter == "*.*")
+                    {
+                        t.SyncMode = p.SyncMode;
+                        if (!string.IsNullOrEmpty(p.FileFilter))
+                            t.FileFilter = p.FileFilter;
+                    }
+                    t.PropertyChanged += (s, e) => ValidateProfile();
+                    BackupTasks.Add(t);
+                }
+            }
+            else
+            {
+                // Tương thích ngược: Sinh task từ BackupPath/RemotePath cũ
+                var sources = (p.BackupPath ?? "").Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).ToList();
+                var dests = (p.RemotePath ?? "").Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(d => d.Trim()).ToList();
+                for (int i = 0; i < Math.Max(sources.Count, dests.Count); i++)
+                {
+                    var src = i < sources.Count ? sources[i] : "";
+                    var dest = i < dests.Count ? dests[i] : "";
+                    if (!string.IsNullOrEmpty(src) || !string.IsNullOrEmpty(dest))
+                    {
+                        var task = new BackupTaskItem
+                        {
+                            Source = src,
+                            Destination = dest,
+                            SyncMode = p.SyncMode,
+                            FileFilter = p.FileFilter ?? "*.*"
+                        };
+                        task.PropertyChanged += (s, e) => ValidateProfile();
+                        BackupTasks.Add(task);
+                    }
+                }
+                p.Tasks = BackupTasks.ToList();
+            }
+
+            UpdateCheckboxesFromFileFilter();
+            ValidateProfile();
+        }
+
+        private void ValidateProfile()
+        {
+            if (SelectedProfile == null)
+            {
+                ProfileError = "";
+                HasProfileError = false;
+                return;
+            }
+
+            var errors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(BackupPath))
+            {
+                errors.Add("Nguồn trống");
+            }
+            else
+            {
+                var sources = BackupPath.Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                        .Select(s => s.Trim())
+                                        .ToList();
+                if (sources.Count == 0)
+                {
+                    errors.Add("Nguồn trống");
+                }
+                else
+                {
+                    foreach (var src in sources)
+                    {
+                        if (!src.Contains(":") || (src.Length > 1 && src[1] == ':'))
+                        {
+                            if (!Directory.Exists(src))
+                            {
+                                errors.Add($"Nguồn không tồn tại: {Path.GetFileName(src)}");
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(RemotePath))
+            {
+                errors.Add("Đích trống");
+            }
+            else
+            {
+                var dests = RemotePath.Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(d => d.Trim())
+                                      .ToList();
+                if (dests.Count == 0)
+                {
+                    errors.Add("Đích trống");
+                }
+            }
+
+            if (errors.Count > 0)
+            {
+                ProfileError = string.Join(" | ", errors);
+                HasProfileError = true;
+            }
+            else
+            {
+                ProfileError = "";
+                HasProfileError = false;
+            }
+        }
+
+        private void UpdateFileFilterFromCheckboxes()
+        {
+            if (_isUpdatingFileFilter) return;
+            _isUpdatingFileFilter = true;
+            try
+            {
+                var allOption = FileExtensionOptions.FirstOrDefault(o => o.Extension == "*.*");
+                var checkedExts = FileExtensionOptions
+                    .Where(o => o.IsChecked && o.Extension != "*.*")
+                    .Select(o => "*" + o.Extension)
+                    .ToList();
+
+                if (allOption != null && allOption.IsChecked)
+                {
+                    // Nếu người dùng vừa check "Tất cả", ta bỏ check tất cả đuôi cụ thể
+                    if (FileFilter != "*.*")
+                    {
+                        foreach (var opt in FileExtensionOptions.Where(o => o.Extension != "*.*"))
+                        {
+                            opt.SetCheckedQuietly(false);
+                        }
+                        FileFilter = "*.*";
+                        return;
+                    }
+                    else if (checkedExts.Count > 0)
+                    {
+                        // Nếu đang ở chế độ "Tất cả" mà check thêm 1 đuôi cụ thể, ta bỏ check "Tất cả"
+                        allOption.SetCheckedQuietly(false);
+                    }
+                }
+
+                if (checkedExts.Count > 0)
+                {
+                    FileFilter = string.Join(";", checkedExts);
+                }
+                else
+                {
+                    // Không có đuôi cụ thể nào được check, tự động check "Tất cả"
+                    if (allOption != null && !allOption.IsChecked)
+                    {
+                        allOption.SetCheckedQuietly(true);
+                    }
+                    FileFilter = "*.*";
+                }
+            }
+            finally { _isUpdatingFileFilter = false; }
+        }
+
+        private void UpdateCheckboxesFromFileFilter()
+        {
+            if (_isUpdatingFileFilter || FileExtensionOptions == null) return;
+            _isUpdatingFileFilter = true;
+            try
+            {
+                var filter = (FileFilter ?? "").Trim();
+                var allOption = FileExtensionOptions.FirstOrDefault(o => o.Extension == "*.*");
+
+                if (string.IsNullOrEmpty(filter) || filter == "*.*" || filter == "*")
+                {
+                    if (allOption != null) allOption.SetCheckedQuietly(true);
+                    foreach (var opt in FileExtensionOptions.Where(o => o.Extension != "*.*"))
+                    {
+                        opt.SetCheckedQuietly(false);
+                    }
+                }
+                else
+                {
+                    if (allOption != null) allOption.SetCheckedQuietly(false);
+                    var parts = filter.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                      .Select(p => p.Trim().TrimStart('*').ToLower())
+                                      .ToList();
+
+                    foreach (var opt in FileExtensionOptions.Where(o => o.Extension != "*.*"))
+                    {
+                        opt.SetCheckedQuietly(parts.Contains(opt.Extension.ToLower()));
+                    }
+                }
+            }
+            finally { _isUpdatingFileFilter = false; }
         }
 
         private void AddProfile()
@@ -529,10 +910,42 @@ namespace SyncDB.ViewModels
                 Description = "Chọn thư mục backup",
                 ShowNewFolderButton = false
             };
-            if (!string.IsNullOrEmpty(BackupPath) && System.IO.Directory.Exists(BackupPath))
-                dialog.SelectedPath = BackupPath;
+
+            if (!string.IsNullOrEmpty(BackupPath))
+            {
+                var paths = BackupPath.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                if (paths.Length > 0 && Directory.Exists(paths[0].Trim()))
+                    dialog.SelectedPath = paths[0].Trim();
+            }
+
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-                BackupPath = dialog.SelectedPath;
+            {
+                if (!string.IsNullOrEmpty(BackupPath))
+                {
+                    var result = MessageBox.Show(
+                        "Bạn có muốn THÊM thư mục này vào danh sách nguồn hiện tại không?\n\n(Chọn 'Yes' để thêm mới vào dòng tiếp theo, chọn 'No' để thay thế hoàn toàn)",
+                        "Thêm nguồn backup",
+                        MessageBoxButton.YesNoCancel,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        var list = BackupPath.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+                        if (!list.Contains(dialog.SelectedPath))
+                        {
+                            BackupPath = (BackupPath.TrimEnd('\r', '\n') + Environment.NewLine + dialog.SelectedPath).Trim();
+                        }
+                    }
+                    else if (result == MessageBoxResult.No)
+                    {
+                        BackupPath = dialog.SelectedPath;
+                    }
+                }
+                else
+                {
+                    BackupPath = dialog.SelectedPath;
+                }
+            }
         }
 
         private void BrowseRclone()
@@ -645,19 +1058,143 @@ namespace SyncDB.ViewModels
             }
         }
 
+        private void AddTask()
+        {
+            var task = new BackupTaskItem { Source = "", Destination = "" };
+            task.PropertyChanged += (s, e) => ValidateProfile();
+            BackupTasks.Add(task);
+            if (SelectedProfile != null)
+            {
+                SelectedProfile.Tasks = BackupTasks.ToList();
+            }
+            ValidateProfile();
+        }
+
+        private void DeleteTask(BackupTaskItem task)
+        {
+            if (task == null) return;
+            BackupTasks.Remove(task);
+            if (SelectedProfile != null)
+            {
+                SelectedProfile.Tasks = BackupTasks.ToList();
+            }
+            ValidateProfile();
+        }
+
+        private void AddTaskWithFolder()
+        {
+            var dialog = new System.Windows.Forms.FolderBrowserDialog
+            {
+                Description = "Chọn thư mục nguồn backup",
+                ShowNewFolderButton = false
+            };
+
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                string defaultDest = SelectedRemote ?? "";
+                var task = new BackupTaskItem { Source = dialog.SelectedPath, Destination = defaultDest };
+                task.PropertyChanged += (s, e) => ValidateProfile();
+                BackupTasks.Add(task);
+                if (SelectedProfile != null)
+                {
+                    SelectedProfile.Tasks = BackupTasks.ToList();
+                }
+                ValidateProfile();
+            }
+        }
+
+        private async Task ScanExtensionsAsync()
+        {
+            var sources = BackupTasks
+                .Select(t => t.Source)
+                .Where(src => !string.IsNullOrWhiteSpace(src) && (!src.Contains(":") || (src.Length > 1 && src[1] == ':')))
+                .ToList();
+
+            if (sources.Count == 0)
+            {
+                MessageBox.Show("Vui lòng thêm ít nhất một thư mục nguồn cục bộ hợp lệ trong bảng trước khi quét.", 
+                                "Thông báo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            StatusText = "🔍 Đang quét định dạng file...";
+            AddLog("🔍 Bắt đầu quét các định dạng file thực tế từ các thư mục nguồn...");
+
+            try
+            {
+                var extensions = await Task.Run(() =>
+                {
+                    var exts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var src in sources)
+                    {
+                        if (Directory.Exists(src))
+                        {
+                            try
+                            {
+                                foreach (var file in Directory.EnumerateFiles(src, "*.*", SearchOption.AllDirectories).Take(10000))
+                                {
+                                    var ext = Path.GetExtension(file);
+                                    if (!string.IsNullOrEmpty(ext))
+                                        exts.Add(ext.ToLower());
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                    return exts;
+                });
+
+                var currentChecked = FileExtensionOptions.Where(o => o.IsChecked).Select(o => o.Extension).ToList();
+                var defaultExts = new[] { ".bak", ".sql", ".zip", ".rar", ".7z", ".mdf", ".ldf", ".txt", ".log" };
+
+                var allExts = extensions.Concat(defaultExts)
+                                        .Select(e => e.ToLower())
+                                        .Distinct()
+                                        .OrderBy(e => e)
+                                        .ToList();
+
+                _dispatcher.Invoke(() =>
+                {
+                    FileExtensionOptions.Clear();
+                    
+                    // Thêm option Tất cả (*.*) đầu tiên
+                    var allChecked = string.IsNullOrEmpty(FileFilter) || FileFilter == "*.*" || FileFilter == "*";
+                    FileExtensionOptions.Add(new FileExtensionOption("*.*", UpdateFileFilterFromCheckboxes)
+                    {
+                        IsChecked = allChecked
+                    });
+
+                    foreach (var ext in allExts)
+                    {
+                        if (ext == "*.*") continue;
+                        var opt = new FileExtensionOption(ext, UpdateFileFilterFromCheckboxes)
+                        {
+                            IsChecked = !allChecked && currentChecked.Contains(ext)
+                        };
+                        FileExtensionOptions.Add(opt);
+                    }
+                    StatusText = "✔ Quét định dạng thành công";
+                    AddLog($"✔ Quét xong! Tìm thấy {extensions.Count} định dạng file thực tế từ nguồn.");
+                });
+            }
+            catch (Exception ex)
+            {
+                StatusText = "✖ Quét định dạng thất bại";
+                AddLog("✖ Lỗi khi quét định dạng file: " + ex.Message);
+            }
+        }
+
         private async Task DoRunSyncAsync()
         {
             if (IsRunning || SelectedProfile == null) return;
-            if (string.IsNullOrWhiteSpace(BackupPath) || !System.IO.Directory.Exists(BackupPath))
+
+            ValidateProfile();
+            if (HasProfileError)
             {
-                AddLog("⚠ Đường dẫn backup không hợp lệ");
+                AddLog("⚠ Vui lòng sửa các lỗi cấu hình trước khi chạy: " + ProfileError);
                 return;
             }
-            if (string.IsNullOrWhiteSpace(RemotePath))
-            {
-                AddLog("⚠ Remote path không được trống");
-                return;
-            }
+
             IsRunning = true;
             StatusText = "🔄 Đang đồng bộ...";
             SaveConfig();
@@ -674,16 +1211,22 @@ namespace SyncDB.ViewModels
 
         private async Task StartWatch()
         {
-            if (string.IsNullOrWhiteSpace(BackupPath) || !System.IO.Directory.Exists(BackupPath))
+            var validTargets = BackupTasks
+                .Where(t => !string.IsNullOrWhiteSpace(t.Source) && Directory.Exists(t.Source))
+                .Select(t => new WatcherTarget { Path = t.Source, Filter = t.FileFilter })
+                .ToList();
+
+            if (validTargets.Count == 0)
             {
-                AddLog("⚠ Đường dẫn backup không hợp lệ để watch");
+                AddLog("⚠ Không có thư mục nguồn cục bộ hợp lệ để watch");
                 return;
             }
-            _watcherService.Start(BackupPath, FileFilter, DebounceSec, FileLockTimeoutSec, FileLockRetryMs);
+
+            _watcherService.Start(validTargets, DebounceSec, FileLockTimeoutSec, FileLockRetryMs);
             IsWatching = true;
             StatusText = "👁 Đang theo dõi thư mục...";
             SaveConfig();
-            AddLog($"👁 Bắt đầu watch: {BackupPath} | Debounce: {DebounceSec}s | Lock timeout: {FileLockTimeoutSec}s | Retry: {FileLockRetryMs}ms");
+            AddLog($"👁 Bắt đầu watch: {validTargets.Count} thư mục | Debounce: {DebounceSec}s | Lock timeout: {FileLockTimeoutSec}s | Retry: {FileLockRetryMs}ms");
 
             if (SyncOnStartWatch)
             {
@@ -703,6 +1246,125 @@ namespace SyncDB.ViewModels
         private void OnOutputReceived(string msg)
         {
             _pendingLogs.Enqueue(msg);
+            ParseRcloneLogForQueue(msg);
+        }
+
+        private void ParseRcloneLogForQueue(string msg)
+        {
+            if (string.IsNullOrWhiteSpace(msg)) return;
+
+            try
+            {
+                // 1. Phân tích các dòng log thành công (Copied, Moved, Deleted)
+                if (msg.Contains("INFO  :") || msg.Contains("NOTICE:"))
+                {
+                    string term = msg.Contains("INFO  :") ? "INFO  :" : "NOTICE:";
+                    if (msg.Contains(": Copied (") || msg.Contains(": Moved") || msg.Contains(": Deleted") || msg.Contains(": Updated"))
+                    {
+                        int idx = msg.IndexOf(term);
+                        if (idx >= 0)
+                        {
+                            string content = msg.Substring(idx + term.Length).Trim();
+                            int colonIdx = content.LastIndexOf(':');
+                            if (colonIdx > 0)
+                            {
+                                string fileName = content.Substring(0, colonIdx).Trim();
+                                string detail = content.Substring(colonIdx + 1).Trim();
+                                AddQueueItem(fileName, "Thành công", detail);
+                            }
+                        }
+                    }
+                    else if (msg.Contains("Failed to copy:") || msg.Contains("Failed to move:") || msg.Contains("Failed to delete:"))
+                    {
+                        int idx = msg.IndexOf(term);
+                        if (idx >= 0)
+                        {
+                            string content = msg.Substring(idx + term.Length).Trim();
+                            int colonIdx = content.LastIndexOf(':');
+                            if (colonIdx > 0)
+                            {
+                                string fileName = content.Substring(0, colonIdx).Trim();
+                                string detail = content.Substring(colonIdx + 1).Trim();
+                                AddQueueItem(fileName, "Thất bại", detail);
+                            }
+                        }
+                    }
+                }
+                // 2. Phân tích các dòng log lỗi (ERROR)
+                else if (msg.Contains("ERROR :"))
+                {
+                    int idx = msg.IndexOf("ERROR :");
+                    if (idx >= 0)
+                    {
+                        string content = msg.Substring(idx + 7).Trim();
+                        int colonIdx = content.IndexOf(':');
+                        if (colonIdx > 0)
+                        {
+                            string fileName = content.Substring(0, colonIdx).Trim();
+                            string detail = content.Substring(colonIdx + 1).Trim();
+                            AddQueueItem(fileName, "Thất bại", detail);
+                        }
+                    }
+                }
+                // 3. Phân tích tiến trình đang truyền (* file: 45% /1.2M/s, 2s)
+                else
+                {
+                    var trimmed = msg.TrimStart();
+                    if (trimmed.StartsWith("*") && trimmed.Contains("%"))
+                    {
+                        string content = trimmed.Substring(1).Trim(); // Bỏ dấu *
+                        int colonIdx = content.LastIndexOf(':');
+                        if (colonIdx > 0)
+                        {
+                            string fileName = content.Substring(0, colonIdx).Trim();
+                            string detail = content.Substring(colonIdx + 1).Trim();
+                            AddQueueItem(fileName, "Đang truyền", detail);
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void AddQueueItem(string fileName, string status, string details)
+        {
+            if (string.IsNullOrWhiteSpace(fileName)) return;
+
+            // Loại bỏ các dòng text hiển thị tóm tắt thống kê của rclone
+            if (fileName.Contains("Checking:") || fileName.Contains("Transferred:") || fileName.Contains("Errors:") || fileName.Contains("Elapsed time:") || fileName.Contains("Remaining:"))
+                return;
+
+            _dispatcher.BeginInvoke(new Action(() =>
+            {
+                var existing = SyncQueue.FirstOrDefault(q => q.FileName == fileName);
+                if (existing != null)
+                {
+                    existing.Status = status;
+                    existing.Details = details;
+                    existing.Time = DateTime.Now.ToString("HH:mm:ss");
+                }
+                else
+                {
+                    var item = new QueueItem
+                    {
+                        Time = DateTime.Now.ToString("HH:mm:ss"),
+                        FileName = fileName,
+                        Status = status,
+                        Details = details
+                    };
+                    SyncQueue.Add(item);
+
+                    // Giới hạn 100 dòng, ưu tiên xóa dòng đã hoàn thành trước
+                    while (SyncQueue.Count > 100)
+                    {
+                        var toRemove = SyncQueue.FirstOrDefault(q => q.Status == "Thành công" || q.Status == "Thất bại");
+                        if (toRemove != null)
+                            SyncQueue.Remove(toRemove);
+                        else
+                            SyncQueue.RemoveAt(0);
+                    }
+                }
+            }));
         }
 
         private void AddLog(string msg)
@@ -807,6 +1469,77 @@ namespace SyncDB.ViewModels
             _watcherService.Dispose();
             _rcloneService.Cancel();
             SaveConfig();
+        }
+    }
+
+    public class FileExtensionOption : ViewModelBase
+    {
+        private string _extension;
+        public string Extension
+        {
+            get => _extension;
+            set => SetProperty(ref _extension, value);
+        }
+
+        private bool _isChecked;
+        public bool IsChecked
+        {
+            get => _isChecked;
+            set
+            {
+                if (SetProperty(ref _isChecked, value))
+                {
+                    OnCheckedChanged?.Invoke();
+                }
+            }
+        }
+
+        public Action OnCheckedChanged { get; set; }
+
+        public FileExtensionOption(string ext, Action onCheckedChanged)
+        {
+            _extension = ext;
+            OnCheckedChanged = onCheckedChanged;
+        }
+
+        public void SetCheckedQuietly(bool value)
+        {
+            if (_isChecked != value)
+            {
+                _isChecked = value;
+                OnPropertyChanged(nameof(IsChecked));
+            }
+        }
+    }
+
+    public class QueueItem : ViewModelBase
+    {
+        private string _time = "";
+        public string Time
+        {
+            get => _time;
+            set => SetProperty(ref _time, value);
+        }
+
+        private string _fileName = "";
+        public string FileName
+        {
+            get => _fileName;
+            set => SetProperty(ref _fileName, value);
+        }
+
+        private string _status = "";
+        public string Status
+        {
+            get => _status;
+            set => SetProperty(ref _status, value);
+        }
+
+        private string _details = "";
+        public string Details
+        {
+            get => _details;
+            set => SetProperty(ref _details, value);
         }
     }
 }
