@@ -244,23 +244,13 @@ namespace SyncDB.Service
 
                     var source = task.Source.Trim();
                     var destination = task.Destination.Trim();
-
-                    // Xử lý tạo thư mục con trên đích nếu có nhiều task để tránh lẫn lộn file
-                    string finalDest = destination;
-                    if (validTasks.Count > 1)
+                    if (destination.Contains(":"))
                     {
-                        try
-                        {
-                            string folderName = Path.GetFileName(source.TrimEnd('\\', '/'));
-                            if (!string.IsNullOrEmpty(folderName))
-                            {
-                                finalDest = destination.Contains(":") 
-                                    ? (destination.TrimEnd('/') + "/" + folderName) 
-                                    : Path.Combine(destination, folderName);
-                            }
-                        }
-                        catch { }
+                        destination = destination.Replace('\\', '/');
                     }
+
+                    // Không tự động tạo thư mục con (người dùng tự quyết định thư mục đích trên cloud)
+                    string finalDest = destination;
 
                     // Ghi header log cho cặp hiện tại
                     File.AppendAllText(logFile,
@@ -289,14 +279,22 @@ namespace SyncDB.Service
                         continue;
                     }
 
-                    // Stream output real-time
+                    // Stream output real-time và tự ghi log vào file bằng C#
                     _currentProcess.OutputDataReceived += (s, e) =>
                     {
-                        if (e.Data != null) OutputReceived?.Invoke(e.Data);
+                        if (e.Data != null)
+                        {
+                            OutputReceived?.Invoke(e.Data);
+                            try { File.AppendAllText(logFile, e.Data + "\r\n"); } catch { }
+                        }
                     };
                     _currentProcess.ErrorDataReceived += (s, e) =>
                     {
-                        if (e.Data != null) OutputReceived?.Invoke(e.Data);
+                        if (e.Data != null)
+                        {
+                            OutputReceived?.Invoke(e.Data);
+                            try { File.AppendAllText(logFile, e.Data + "\r\n"); } catch { }
+                        }
                     };
                     _currentProcess.BeginOutputReadLine();
                     _currentProcess.BeginErrorReadLine();
@@ -362,8 +360,9 @@ namespace SyncDB.Service
             if (!string.IsNullOrWhiteSpace(profile.BandwidthLimit))
                 sb.AppendFormat(" --bwlimit {0}", profile.BandwidthLimit);
 
-            sb.AppendFormat(" --log-file=\"{0}\" --log-level {1}", logFile, profile.LogLevel);
-            sb.Append(" --stats 1s --stats-log-level NOTICE");
+            // Bỏ --log-file để rclone ghi ra stdout/stderr cho app C# parse tiến độ, tự ghi file log bằng C#
+            sb.AppendFormat(" --log-level {0}", profile.LogLevel);
+            sb.Append(" --stats 1s --stats-log-level NOTICE --progress");
 
             // Xử lý bộ lọc tệp tin riêng của Task
             var filter = (task.FileFilter ?? "").Trim();

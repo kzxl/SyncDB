@@ -146,13 +146,13 @@
                                     <TextBlock Text="📋 Danh sách nhiệm vụ đồng bộ" FontWeight="Bold" FontSize="14" 
                                                Foreground="{StaticResource AccentBlueBrush}" VerticalAlignment="Center"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <Button Command="{Binding AddTaskWithFolderCommand}" Margin="0,0,8,0" Style="{StaticResource AccentButton}" Padding="10,4">
+                                        <Button Command="{Binding AddTaskWithFolderCommand}" IsEnabled="{Binding CanEditTasks}" Margin="0,0,8,0" Style="{StaticResource AccentButton}" Padding="10,4">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xED25;" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                 <TextBlock Text="Thêm thư mục" VerticalAlignment="Center" FontSize="11.5"/>
                                             </StackPanel>
                                         </Button>
-                                        <Button Command="{Binding AddTaskCommand}" Padding="10,4">
+                                        <Button Command="{Binding AddTaskCommand}" IsEnabled="{Binding CanEditTasks}" Padding="10,4">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE710;" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                 <TextBlock Text="Thêm dòng" VerticalAlignment="Center" FontSize="11.5"/>
@@ -172,7 +172,7 @@
                                           RowBackground="Transparent"
                                           AlternatingRowBackground="{StaticResource BgDarkBrush}"
                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                          IsEnabled="{Binding IsRunning, Converter={StaticResource InverseBoolConverter}}">
+                                          IsEnabled="{Binding CanEditTasks}">
                                     <DataGrid.Resources>
                                         <Style TargetType="DataGridColumnHeader">
                                             <Setter Property="Background" Value="{StaticResource BgDarkBrush}"/>
@@ -233,7 +233,8 @@
                                                             CommandParameter="{Binding}"
                                                             Style="{StaticResource DangerButton}"
                                                             Height="24" Width="44" HorizontalAlignment="Center" Padding="0"
-                                                            ToolTip="Xóa nhiệm vụ này">
+                                                            ToolTip="Xóa nhiệm vụ này"
+                                                            IsEnabled="{Binding DataContext.CanEditTasks, RelativeSource={RelativeSource AncestorType=DataGrid}}">
                                                         <TextBlock FontFamily="{StaticResource IconFont}" Text="&#xE74D;" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Button>
                                                 </DataTemplate>

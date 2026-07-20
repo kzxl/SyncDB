@@ -26,6 +26,7 @@ namespace SyncDB.ViewModels
         
         private readonly ConcurrentQueue<string> _pendingLogs = new ConcurrentQueue<string>();
         private readonly DispatcherTimer _logFlushTimer;
+        private static readonly char[] EmptyCharArray = new char[0];
 
         // ═══ Profile ═══
         private ObservableCollection<SyncProfile> _profiles;
@@ -313,6 +314,7 @@ namespace SyncDB.ViewModels
                 if (SetProperty(ref _isRunning, value))
                 {
                     OnPropertyChanged(nameof(CanChangeProfile));
+                    OnPropertyChanged(nameof(CanEditTasks));
                 }
             }
         }
@@ -326,9 +328,12 @@ namespace SyncDB.ViewModels
                 if (SetProperty(ref _isWatching, value))
                 {
                     OnPropertyChanged(nameof(CanChangeProfile));
+                    OnPropertyChanged(nameof(CanEditTasks));
                 }
             }
         }
+
+        public bool CanEditTasks => !IsRunning && !IsWatching;
 
         private string _statusText = "Sẵn sàng";
         public string StatusText
@@ -1198,7 +1203,18 @@ namespace SyncDB.ViewModels
             IsRunning = true;
             StatusText = "🔄 Đang đồng bộ...";
             SaveConfig();
-            await _rcloneService.RunSyncAsync(SelectedProfile);
+            try
+            {
+                await _rcloneService.RunSyncAsync(SelectedProfile);
+            }
+            catch (Exception ex)
+            {
+                AddLog($"✖ Lỗi đồng bộ: {ex.ToString()}");
+            }
+            finally
+            {
+                IsRunning = false;
+            }
         }
 
         private void CancelSync()
@@ -1309,7 +1325,7 @@ namespace SyncDB.ViewModels
                 // 3. Phân tích tiến trình đang truyền (* file: 45% /1.2M/s, 2s)
                 else
                 {
-                    var trimmed = msg.TrimStart();
+                    var trimmed = msg.TrimStart(EmptyCharArray);
                     if (trimmed.StartsWith("*") && trimmed.Contains("%"))
                     {
                         string content = trimmed.Substring(1).Trim(); // Bỏ dấu *
@@ -1334,7 +1350,7 @@ namespace SyncDB.ViewModels
             if (fileName.Contains("Checking:") || fileName.Contains("Transferred:") || fileName.Contains("Errors:") || fileName.Contains("Elapsed time:") || fileName.Contains("Remaining:"))
                 return;
 
-            _dispatcher.BeginInvoke(new Action(() =>
+            _dispatcher.InvokeAsync(() =>
             {
                 var existing = SyncQueue.FirstOrDefault(q => q.FileName == fileName);
                 if (existing != null)
@@ -1364,7 +1380,7 @@ namespace SyncDB.ViewModels
                             SyncQueue.RemoveAt(0);
                     }
                 }
-            }));
+            });
         }
 
         private void AddLog(string msg)
